@@ -131,8 +131,12 @@ export const DailyMealsList: React.FC<DailyMealsListProps> = ({
                   </div>
 
                   <button
-                    onClick={() => onOpenLogger(type)}
-                    className="flex h-7 w-7 items-center justify-center rounded-lg bg-zinc-800 border border-white/[0.08] text-zinc-300 hover:bg-zinc-100 hover:text-zinc-950 transition-colors cursor-pointer"
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenLogger(type);
+                    }}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg bg-zinc-800 border border-white/[0.08] text-zinc-300 hover:bg-zinc-100 hover:text-zinc-950 transition-colors cursor-pointer active:scale-95 shadow-sm"
                     title={`Add food to ${title}`}
                   >
                     <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
@@ -143,15 +147,19 @@ export const DailyMealsList: React.FC<DailyMealsListProps> = ({
               {/* Items List */}
               <div className="my-3 flex-1 space-y-2.5 min-h-[90px]">
                 {mealsOfType.length === 0 ? (
-                  <div
-                    onClick={() => onOpenLogger(type)}
-                    className="flex flex-col items-center justify-center h-24 rounded-xl border border-dashed border-white/[0.08] bg-zinc-900/30 text-center p-3 cursor-pointer hover:border-white/20 transition-colors"
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenLogger(type);
+                    }}
+                    className="w-full flex flex-col items-center justify-center h-24 rounded-xl border border-dashed border-white/[0.08] bg-zinc-900/30 text-center p-3 cursor-pointer hover:border-white/20 hover:bg-zinc-900/50 transition-colors active:scale-[0.99]"
                   >
                     <span className="text-xs text-zinc-500">No {title.toLowerCase()} logged yet</span>
-                    <span className="text-[11px] text-zinc-400 mt-1 flex items-center gap-1 font-medium">
-                      <Plus className="w-3 h-3" /> Log {title} item
+                    <span className="text-[11px] text-zinc-300 mt-1 flex items-center gap-1 font-semibold">
+                      <Plus className="w-3.5 h-3.5 text-emerald-400 stroke-[3]" /> Log {title} item
                     </span>
-                  </div>
+                  </button>
                 ) : (
                   mealsOfType.map((meal) => {
                     const timeDisplay = meal.mealTime || meal.timeLogged;
@@ -201,17 +209,25 @@ export const DailyMealsList: React.FC<DailyMealsListProps> = ({
                             <span className="font-mono text-xs font-semibold text-white tabular-nums bg-zinc-800/80 px-2 py-0.5 rounded border border-white/[0.06]">
                               {meal.calories} kcal
                             </span>
-                            <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="flex items-center sm:opacity-0 group-hover:opacity-100 transition-opacity">
                               <button
-                                onClick={() => handleDuplicate(meal)}
-                                className="p-1 rounded text-zinc-400 hover:text-white"
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDuplicate(meal);
+                                }}
+                                className="p-1 rounded text-zinc-400 hover:text-white cursor-pointer active:scale-90"
                                 title="Repeat item"
                               >
                                 <Plus className="w-3 h-3" />
                               </button>
                               <button
-                                onClick={() => deleteMeal(meal.id)}
-                                className="p-1 rounded text-zinc-400 hover:text-rose-400"
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  deleteMeal(meal.id);
+                                }}
+                                className="p-1 rounded text-zinc-400 hover:text-rose-400 cursor-pointer active:scale-90"
                                 title="Remove entry"
                               >
                                 <Trash2 className="w-3 h-3" />

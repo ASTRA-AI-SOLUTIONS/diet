@@ -87,30 +87,46 @@ export const WaterTracker3D: React.FC = () => {
           <div className="text-xs text-zinc-400">Quick Increment:</div>
           <div className="grid grid-cols-2 gap-2">
             <button
-              onClick={() => handleAdd(250)}
-              className="flex items-center justify-center gap-1 rounded-xl border border-white/[0.08] bg-zinc-900/90 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-800 hover:text-white transition-all cursor-pointer"
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleAdd(250);
+              }}
+              className="flex items-center justify-center gap-1 rounded-xl border border-white/[0.08] bg-zinc-900/90 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-800 hover:text-white transition-all cursor-pointer active:scale-95 shadow-sm"
             >
               <Plus className="w-3 h-3" />
               +250 ml
             </button>
             <button
-              onClick={() => handleAdd(500)}
-              className="flex items-center justify-center gap-1 rounded-xl border border-white/[0.08] bg-zinc-900/90 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-800 hover:text-white transition-all cursor-pointer"
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleAdd(500);
+              }}
+              className="flex items-center justify-center gap-1 rounded-xl border border-white/[0.08] bg-zinc-900/90 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-800 hover:text-white transition-all cursor-pointer active:scale-95 shadow-sm"
             >
               <Plus className="w-3 h-3" />
               +500 ml
             </button>
             <button
-              onClick={() => handleAdd(750)}
-              className="flex items-center justify-center gap-1 rounded-xl border border-white/[0.08] bg-zinc-900/90 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-800 hover:text-white transition-all cursor-pointer"
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleAdd(750);
+              }}
+              className="flex items-center justify-center gap-1 rounded-xl border border-white/[0.08] bg-zinc-900/90 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-800 hover:text-white transition-all cursor-pointer active:scale-95 shadow-sm"
             >
               <Plus className="w-3 h-3" />
               +750 ml
             </button>
             <button
-              onClick={() => handleAdd(-250)}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleAdd(-250);
+              }}
               disabled={currentDayWater <= 0}
-              className="flex items-center justify-center gap-1 rounded-xl border border-white/[0.04] bg-zinc-950 px-3 py-2 text-xs font-medium text-zinc-500 hover:text-zinc-300 transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+              className="flex items-center justify-center gap-1 rounded-xl border border-white/[0.04] bg-zinc-950 px-3 py-2 text-xs font-medium text-zinc-500 hover:text-zinc-300 transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed active:scale-95"
             >
               <Minus className="w-3 h-3" />
               -250 ml

@@ -1,132 +1,246 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { UserProfile } from '../types/diet';
-import { INITIAL_USERS } from '../data/seedData';
+import { auth, db, googleProvider } from '../firebase';
+import {
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged,
+  User,
+} from 'firebase/auth';
+import {
+  doc,
+  getDoc,
+  setDoc,
+  deleteDoc,
+  onSnapshot,
+} from 'firebase/firestore';
+import { handleFirestoreError, OperationType } from '../utils/firestoreErrors';
 
 interface AuthContextType {
   currentUser: UserProfile | null;
+  firebaseUser: User | null;
+  authLoading: boolean;
   users: UserProfile[];
+  pendingGoogleUser: { name: string; email: string; uid: string } | null;
+  clearPendingGoogleUser: () => void;
+  signInWithGoogle: () => Promise<boolean>;
   login: (email: string) => boolean;
-  register: (newUser: Omit<UserProfile, 'id' | 'createdAt'>) => UserProfile;
-  logout: () => void;
+  register: (newUser: Omit<UserProfile, 'id' | 'createdAt'>) => Promise<UserProfile>;
+  logout: () => Promise<void>;
   switchUser: (userId: string) => void;
-  updateCurrentUser: (updated: Partial<UserProfile>) => void;
-  updateUser: (userId: string, updated: Partial<UserProfile>) => void;
-  deleteAccount: (userId: string) => void;
+  updateCurrentUser: (updated: Partial<UserProfile>) => Promise<void>;
+  updateUser: (userId: string, updated: Partial<UserProfile>) => Promise<void>;
+  deleteAccount: (userId: string) => Promise<void>;
 }
 
-const STORAGE_USERS_KEY = 'astradiet_v2_users';
-const STORAGE_CURRENT_USER_ID = 'astradiet_v2_current_user_id';
+const STORAGE_PROFILE_KEY = 'astradiet_cloud_profile';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [users, setUsers] = useState<UserProfile[]>(() => {
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_USERS_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
-        }
-      }
+      const saved = localStorage.getItem(STORAGE_PROFILE_KEY);
+      if (saved) return JSON.parse(saved);
     } catch {
-      // Fallback
+      // fallback
     }
-    return INITIAL_USERS;
+    return null;
   });
 
-  const [currentUserId, setCurrentUserId] = useState<string | null>(() => {
-    try {
-      const savedId = localStorage.getItem(STORAGE_CURRENT_USER_ID);
-      if (savedId) return savedId;
-    } catch {
-      // Fallback
-    }
-    return INITIAL_USERS[0]?.id || null;
-  });
+  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [pendingGoogleUser, setPendingGoogleUser] = useState<{
+    name: string;
+    email: string;
+    uid: string;
+  } | null>(null);
 
+  // Sync state to local storage for fast warm boots
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(users));
-    } catch (e) {
-      console.error('Error saving users to localStorage', e);
-    }
-  }, [users]);
-
-  useEffect(() => {
-    try {
-      if (currentUserId) {
-        localStorage.setItem(STORAGE_CURRENT_USER_ID, currentUserId);
+      if (currentUser) {
+        localStorage.setItem(STORAGE_PROFILE_KEY, JSON.stringify(currentUser));
       } else {
-        localStorage.removeItem(STORAGE_CURRENT_USER_ID);
+        localStorage.removeItem(STORAGE_PROFILE_KEY);
       }
     } catch (e) {
-      console.error('Error saving current user ID', e);
+      console.error('Error saving profile to localStorage', e);
     }
-  }, [currentUserId]);
+  }, [currentUser]);
 
-  const currentUser = users.find((u) => u.id === currentUserId) || null;
+  // Listen to Firebase Auth state
+  useEffect(() => {
+    let unsubscribeFirestore: (() => void) | null = null;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (fbUser) => {
+      setFirebaseUser(fbUser);
+
+      if (fbUser) {
+        const userDocRef = doc(db, 'users', fbUser.uid);
+
+        // Real-time listener for current user document
+        unsubscribeFirestore = onSnapshot(
+          userDocRef,
+          (docSnap) => {
+            if (docSnap.exists()) {
+              const data = docSnap.data() as UserProfile;
+              setCurrentUser({ ...data, id: fbUser.uid });
+              setPendingGoogleUser(null);
+            } else {
+              // Authenticated with Google but no profile doc created yet
+              setPendingGoogleUser({
+                name: fbUser.displayName || '',
+                email: fbUser.email || '',
+                uid: fbUser.uid,
+              });
+            }
+            setAuthLoading(false);
+          },
+          (err) => {
+            console.warn('Firestore snapshot error:', err);
+            setAuthLoading(false);
+          }
+        );
+      } else {
+        if (unsubscribeFirestore) {
+          unsubscribeFirestore();
+          unsubscribeFirestore = null;
+        }
+        setPendingGoogleUser(null);
+        setAuthLoading(false);
+      }
+    });
+
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeFirestore) unsubscribeFirestore();
+    };
+  }, []);
+
+  const signInWithGoogle = async (): Promise<boolean> => {
+    setAuthLoading(true);
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const fbUser = result.user;
+
+      // Check if profile document already exists
+      const userDocRef = doc(db, 'users', fbUser.uid);
+      const snap = await getDoc(userDocRef);
+
+      if (snap.exists()) {
+        const data = snap.data() as UserProfile;
+        setCurrentUser({ ...data, id: fbUser.uid });
+        setPendingGoogleUser(null);
+        setAuthLoading(false);
+        return true;
+      } else {
+        setPendingGoogleUser({
+          name: fbUser.displayName || '',
+          email: fbUser.email || '',
+          uid: fbUser.uid,
+        });
+        setAuthLoading(false);
+        return false;
+      }
+    } catch (error) {
+      setAuthLoading(false);
+      console.error('Google sign in error:', error);
+      throw error;
+    }
+  };
+
+  const register = async (
+    data: Omit<UserProfile, 'id' | 'createdAt'>
+  ): Promise<UserProfile> => {
+    const userId = firebaseUser?.uid || pendingGoogleUser?.uid || `user_${Date.now()}`;
+    const newUser: UserProfile = {
+      ...data,
+      id: userId,
+      createdAt: new Date().toISOString(),
+    };
+
+    // Save to Firestore if connected
+    try {
+      const userDocRef = doc(db, 'users', userId);
+      await setDoc(userDocRef, newUser);
+    } catch (err) {
+      console.warn('Saving profile to firestore offline or unauthorized:', err);
+    }
+
+    setCurrentUser(newUser);
+    setPendingGoogleUser(null);
+    return newUser;
+  };
 
   const login = (email: string): boolean => {
-    const trimmed = email.trim().toLowerCase();
-    const found = users.find((u) => u.email.toLowerCase() === trimmed);
-    if (found) {
-      setCurrentUserId(found.id);
+    if (currentUser && currentUser.email.toLowerCase() === email.trim().toLowerCase()) {
       return true;
     }
     return false;
   };
 
-  const register = (data: Omit<UserProfile, 'id' | 'createdAt'>): UserProfile => {
-    const newId = `user_${Date.now()}`;
-    const newUser: UserProfile = {
-      ...data,
-      id: newId,
-      createdAt: new Date().toISOString(),
-    };
-
-    setUsers((prev) => [...prev, newUser]);
-    setCurrentUserId(newId);
-    return newUser;
-  };
-
-  const logout = () => {
-    setCurrentUserId(null);
+  const logout = async () => {
+    try {
+      await signOut(auth);
+    } catch (e) {
+      console.error('Sign out error', e);
+    }
+    setCurrentUser(null);
+    setPendingGoogleUser(null);
+    localStorage.removeItem(STORAGE_PROFILE_KEY);
   };
 
   const switchUser = (userId: string) => {
-    const target = users.find((u) => u.id === userId);
-    if (target) {
-      setCurrentUserId(target.id);
+    if (currentUser?.id === userId) return;
+  };
+
+  const updateCurrentUser = async (updated: Partial<UserProfile>) => {
+    if (!currentUser) return;
+    const merged = { ...currentUser, ...updated };
+    setCurrentUser(merged);
+
+    try {
+      const userDocRef = doc(db, 'users', currentUser.id);
+      await setDoc(userDocRef, updated, { merge: true });
+    } catch (err) {
+      console.warn('Error updating profile in firestore:', err);
     }
   };
 
-  const updateCurrentUser = (updated: Partial<UserProfile>) => {
-    if (!currentUserId) return;
-    setUsers((prev) =>
-      prev.map((u) => (u.id === currentUserId ? { ...u, ...updated } : u))
-    );
-  };
-
-  const updateUser = (userId: string, updated: Partial<UserProfile>) => {
-    setUsers((prev) =>
-      prev.map((u) => (u.id === userId ? { ...u, ...updated } : u))
-    );
-  };
-
-  const deleteAccount = (userId: string) => {
-    setUsers((prev) => prev.filter((u) => u.id !== userId));
-    if (currentUserId === userId) {
-      const remaining = users.filter((u) => u.id !== userId);
-      setCurrentUserId(remaining[0]?.id || null);
+  const updateUser = async (userId: string, updated: Partial<UserProfile>) => {
+    if (currentUser?.id === userId) {
+      await updateCurrentUser(updated);
     }
   };
+
+  const deleteAccount = async (userId: string) => {
+    try {
+      const userDocRef = doc(db, 'users', userId);
+      await deleteDoc(userDocRef);
+    } catch (err) {
+      console.warn('Error deleting user profile from firestore:', err);
+    }
+
+    await logout();
+  };
+
+  const clearPendingGoogleUser = () => {
+    setPendingGoogleUser(null);
+  };
+
+  const users = currentUser ? [currentUser] : [];
 
   return (
     <AuthContext.Provider
       value={{
         currentUser,
+        firebaseUser,
+        authLoading,
         users,
+        pendingGoogleUser,
+        clearPendingGoogleUser,
+        signInWithGoogle,
         login,
         register,
         logout,

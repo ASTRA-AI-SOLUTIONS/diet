@@ -1,0 +1,74 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile with personal biometrics, calorie/macro targets, and diet goal",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "User ID matching auth UID" },
+        "name": { "type": "string", "description": "Full display name" },
+        "email": { "type": "string", "description": "User email address" },
+        "gender": { "type": "string", "enum": ["male", "female", "other"] },
+        "age": { "type": "number", "description": "Age in years" },
+        "heightCm": { "type": "number", "description": "Height in centimeters" },
+        "weightKg": { "type": "number", "description": "Current body weight in kg" },
+        "targetWeightKg": { "type": "number", "description": "Target body weight in kg" },
+        "activityLevel": { "type": "string" },
+        "goal": { "type": "string" },
+        "macroSplit": { "type": "object" },
+        "targets": { "type": "object" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "name", "email", "weightKg", "targets"]
+    },
+    "MealEntry": {
+      "title": "MealEntry",
+      "description": "Logged food portion and macronutrient entry for a meal",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Meal entry unique identifier" },
+        "userId": { "type": "string", "description": "Author UID" },
+        "date": { "type": "string", "description": "Date ISO string YYYY-MM-DD" },
+        "mealType": { "type": "string", "enum": ["breakfast", "lunch", "dinner", "snacks"] },
+        "foodName": { "type": "string" },
+        "servings": { "type": "number" },
+        "servingUnit": { "type": "string" },
+        "grams": { "type": "number" },
+        "calories": { "type": "number" },
+        "protein": { "type": "number" },
+        "carbs": { "type": "number" },
+        "fats": { "type": "number" },
+        "fiber": { "type": "number" },
+        "mealTime": { "type": "string" },
+        "timeLogged": { "type": "string" }
+      },
+      "required": ["id", "userId", "date", "mealType", "foodName", "calories", "grams"]
+    },
+    "DailyLog": {
+      "title": "DailyLog",
+      "description": "Daily hydration and activity log for a specific date",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string", "description": "Date ISO string YYYY-MM-DD" },
+        "waterMl": { "type": "number", "description": "Water consumed in ml" },
+        "notes": { "type": "string" }
+      },
+      "required": ["date", "waterMl"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Stores user athlete profile, biometrics, and calculated macro targets"
+    },
+    "/users/{userId}/meals/{mealId}": {
+      "schema": "MealEntry",
+      "description": "Stores individual meal logs logged by the user"
+    },
+    "/users/{userId}/dailyLogs/{date}": {
+      "schema": "DailyLog",
+      "description": "Stores daily summary metrics such as hydration"
+    }
+  }
+}

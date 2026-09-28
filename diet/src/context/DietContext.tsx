@@ -4,6 +4,14 @@ import { MealPreset } from '../data/foodDatabase';
 import { INITIAL_MEALS, INITIAL_DAILY_LOGS } from '../data/seedData';
 import { formatDateToIso, getFoodReferenceGrams } from '../utils/nutritionCalculations';
 import { useAuth } from './AuthContext';
+import { db } from '../firebase';
+import {
+  collection,
+  doc,
+  setDoc,
+  deleteDoc,
+  onSnapshot,
+} from 'firebase/firestore';
 
 interface MacroStatus {
   consumed: number;
@@ -50,13 +58,13 @@ interface DietContextType {
   clearDayMeals: () => void;
 }
 
-const STORAGE_MEALS_KEY = 'astradiet_v2_meals';
-const STORAGE_DAILY_LOGS_KEY = 'astradiet_v2_daily_logs';
+const STORAGE_MEALS_KEY = 'astradiet_cloud_meals';
+const STORAGE_DAILY_LOGS_KEY = 'astradiet_cloud_daily_logs';
 
 const DietContext = createContext<DietContextType | undefined>(undefined);
 
 export const DietProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { currentUser } = useAuth();
+  const { currentUser, firebaseUser } = useAuth();
   const [selectedDate, setSelectedDate] = useState<string>(() => formatDateToIso(new Date()));
 
   const [meals, setMeals] = useState<MealEntry[]>(() => {
@@ -85,6 +93,7 @@ export const DietProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return INITIAL_DAILY_LOGS;
   });
 
+  // Local storage caching for instant offline boots
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_MEALS_KEY, JSON.stringify(meals));
@@ -100,6 +109,49 @@ export const DietProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('Error saving daily logs', e);
     }
   }, [dailyLogs]);
+
+  // Real-time Firestore sync when a user is signed in
+  useEffect(() => {
+    if (!currentUser?.id || !firebaseUser || firebaseUser.uid !== currentUser.id) {
+      return;
+    }
+
+    // Listen to meals subcollection for this user
+    const mealsColl = collection(db, 'users', currentUser.id, 'meals');
+    const unsubMeals = onSnapshot(
+      mealsColl,
+      (snapshot) => {
+        const cloudMeals = snapshot.docs.map((d) => ({
+          ...d.data(),
+          id: d.id,
+        })) as MealEntry[];
+        setMeals(cloudMeals);
+      },
+      (error) => {
+        console.warn('Error reading meals from firestore:', error);
+      }
+    );
+
+    // Listen to daily logs subcollection for this user
+    const logsColl = collection(db, 'users', currentUser.id, 'dailyLogs');
+    const unsubLogs = onSnapshot(
+      logsColl,
+      (snapshot) => {
+        const cloudLogs = snapshot.docs.map((d) => ({
+          ...d.data(),
+        })) as DailyLog[];
+        setDailyLogs(cloudLogs);
+      },
+      (error) => {
+        console.warn('Error reading daily logs from firestore:', error);
+      }
+    );
+
+    return () => {
+      unsubMeals();
+      unsubLogs();
+    };
+  }, [currentUser?.id, firebaseUser]);
 
   const jumpToToday = () => {
     setSelectedDate(formatDateToIso(new Date()));
@@ -131,7 +183,7 @@ export const DietProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return log ? log.waterMl : 0;
   }, [dailyLogs, selectedDate]);
 
-  const setWaterForDay = (amountMl: number) => {
+  const setWaterForDay = async (amountMl: number) => {
     const clamped = Math.max(0, Math.min(10000, Math.round(amountMl)));
     setDailyLogs((prev) => {
       const existing = prev.find((l) => l.date === selectedDate);
@@ -143,6 +195,16 @@ export const DietProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return [...prev, { date: selectedDate, waterMl: clamped }];
       }
     });
+
+    if (!currentUser) return;
+    try {
+      if (firebaseUser && firebaseUser.uid === currentUser.id) {
+        const logRef = doc(db, 'users', currentUser.id, 'dailyLogs', selectedDate);
+        await setDoc(logRef, { date: selectedDate, waterMl: clamped }, { merge: true });
+      }
+    } catch (err) {
+      console.warn('Error saving water log to firestore:', err);
+    }
   };
 
   const addWaterForDay = (deltaMl: number) => {
@@ -165,28 +227,29 @@ export const DietProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let totalCarbs = 0;
     let totalFat = 0;
     let totalFiber = 0;
+
     let bCal = 0;
     let lCal = 0;
     let dCal = 0;
     let sCal = 0;
 
-    for (const m of currentDayMeals) {
-      totalCal += m.calories || 0;
-      totalProt += m.protein || 0;
-      totalCarbs += m.carbs || 0;
-      totalFat += m.fats || 0;
-      totalFiber += m.fiber || 0;
+    currentDayMeals.forEach((meal) => {
+      totalCal += meal.calories;
+      totalProt += meal.protein;
+      totalCarbs += meal.carbs;
+      totalFat += meal.fats;
+      totalFiber += meal.fiber || 0;
 
-      if (m.mealType === 'breakfast') bCal += m.calories || 0;
-      else if (m.mealType === 'lunch') lCal += m.calories || 0;
-      else if (m.mealType === 'dinner') dCal += m.calories || 0;
-      else if (m.mealType === 'snacks') sCal += m.calories || 0;
-    }
+      if (meal.mealType === 'breakfast') bCal += meal.calories;
+      else if (meal.mealType === 'lunch') lCal += meal.calories;
+      else if (meal.mealType === 'dinner') dCal += meal.calories;
+      else if (meal.mealType === 'snacks') sCal += meal.calories;
+    });
 
     const calcStatus = (consumed: number, target: number): MacroStatus => {
       const diff = consumed - target;
       const isExceeded = diff > 0;
-      const remaining = isExceeded ? 0 : Math.max(0, target - consumed);
+      const remaining = isExceeded ? 0 : target - consumed;
       const exceeded = isExceeded ? diff : 0;
       const percentage = target > 0 ? Math.round((consumed / target) * 100) : 0;
 
@@ -215,29 +278,60 @@ export const DietProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [currentUser, currentDayMeals, currentDayWater]);
 
-  const addMeal = (entry: Omit<MealEntry, 'id' | 'userId' | 'timeLogged'>) => {
+  const addMeal = async (entry: Omit<MealEntry, 'id' | 'userId' | 'timeLogged'>) => {
     if (!currentUser) return;
     const now = new Date();
     const timeLogged = `${String(now.getHours()).padStart(2, '0')}:${String(
       now.getMinutes()
     ).padStart(2, '0')}`;
+    const mealId = `meal_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
 
     const newMeal: MealEntry = {
       ...entry,
-      id: `meal_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      date: entry.date || selectedDate,
+      id: mealId,
       userId: currentUser.id,
       timeLogged,
     };
 
+    // Optimistically update local state
     setMeals((prev) => [...prev, newMeal]);
+
+    // Save to Firestore if authenticated
+    try {
+      if (firebaseUser && firebaseUser.uid === currentUser.id) {
+        const mealRef = doc(db, 'users', currentUser.id, 'meals', mealId);
+        await setDoc(mealRef, newMeal);
+      }
+    } catch (err) {
+      console.warn('Error saving meal to firestore:', err);
+    }
   };
 
-  const updateMeal = (id: string, entry: Partial<MealEntry>) => {
+  const updateMeal = async (id: string, entry: Partial<MealEntry>) => {
     setMeals((prev) => prev.map((m) => (m.id === id ? { ...m, ...entry } : m)));
+    if (!currentUser) return;
+    try {
+      if (firebaseUser && firebaseUser.uid === currentUser.id) {
+        const mealRef = doc(db, 'users', currentUser.id, 'meals', id);
+        await setDoc(mealRef, entry, { merge: true });
+      }
+    } catch (err) {
+      console.warn('Error updating meal in firestore:', err);
+    }
   };
 
-  const deleteMeal = (id: string) => {
+  const deleteMeal = async (id: string) => {
     setMeals((prev) => prev.filter((m) => m.id !== id));
+    if (!currentUser) return;
+    try {
+      if (firebaseUser && firebaseUser.uid === currentUser.id) {
+        const mealRef = doc(db, 'users', currentUser.id, 'meals', id);
+        await deleteDoc(mealRef);
+      }
+    } catch (err) {
+      console.warn('Error deleting meal from firestore:', err);
+    }
   };
 
   const quickAddFood = (food: FoodItem, mealType: MealType, multiplier = 1) => {
@@ -276,11 +370,21 @@ export const DietProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
-  const clearDayMeals = () => {
+  const clearDayMeals = async () => {
     if (!currentUser) return;
+    const toDelete = meals.filter((m) => m.userId === currentUser.id && m.date === selectedDate);
     setMeals((prev) =>
       prev.filter((m) => !(m.userId === currentUser.id && m.date === selectedDate))
     );
+    try {
+      if (firebaseUser && firebaseUser.uid === currentUser.id) {
+        await Promise.all(
+          toDelete.map((m) => deleteDoc(doc(db, 'users', currentUser.id, 'meals', m.id)))
+        );
+      }
+    } catch (err) {
+      console.warn('Error clearing day meals in firestore:', err);
+    }
   };
 
   const exportAllData = () => {
@@ -295,14 +399,23 @@ export const DietProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const importAllData = (jsonData: string): boolean => {
     try {
       const parsed = JSON.parse(jsonData);
-      if (Array.isArray(parsed.meals)) {
+      if (parsed && Array.isArray(parsed.meals) && Array.isArray(parsed.dailyLogs)) {
         setMeals(parsed.meals);
-      }
-      if (Array.isArray(parsed.dailyLogs)) {
         setDailyLogs(parsed.dailyLogs);
+        // Sync to firestore if user is signed in
+        if (currentUser) {
+          parsed.meals.forEach((m: MealEntry) => {
+            setDoc(doc(db, 'users', currentUser.id, 'meals', m.id), m, { merge: true });
+          });
+          parsed.dailyLogs.forEach((l: DailyLog) => {
+            setDoc(doc(db, 'users', currentUser.id, 'dailyLogs', l.date), l, { merge: true });
+          });
+        }
+        return true;
       }
-      return true;
-    } catch {
+      return false;
+    } catch (e) {
+      console.error('Import error', e);
       return false;
     }
   };

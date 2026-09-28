@@ -33,7 +33,7 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
   onClose,
   initialMealType = 'breakfast',
 }) => {
-  const { addMeal, summary } = useDiet();
+  const { addMeal, summary, selectedDate } = useDiet();
 
   const [activeTab, setActiveTab] = useState<'database' | 'presets' | 'custom'>('database');
   const [mealType, setMealType] = useState<MealType>(initialMealType);
@@ -213,7 +213,7 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
     if (!selectedFood || !preview) return;
 
     addMeal({
-      date: new Date().toISOString().split('T')[0],
+      date: selectedDate,
       mealType,
       foodName: selectedFood.name,
       servings: preview.multiplierDisplay,
@@ -233,7 +233,7 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
 
   const handleAddPreset = (preset: MealPreset) => {
     addMeal({
-      date: new Date().toISOString().split('T')[0],
+      date: selectedDate,
       mealType,
       foodName: preset.name,
       servings: 1,
@@ -260,7 +260,7 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
     const fib = Number(customFiber) || 0;
 
     addMeal({
-      date: new Date().toISOString().split('T')[0],
+      date: selectedDate,
       mealType,
       foodName: customName.trim(),
       servings: 1,
@@ -291,18 +291,17 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
     );
   };
 
-  if (!isOpen) return null;
-
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.96, y: 10 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.96, y: 10 }}
-          transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-          className="relative flex flex-col w-full max-w-2xl max-h-[92vh] overflow-hidden rounded-2xl border border-white/[0.08] bg-[#111114] text-zinc-100 shadow-2xl"
-        >
+      {isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.96, y: 10 }}
+            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            className="relative flex flex-col w-full max-w-2xl max-h-[92vh] overflow-hidden rounded-2xl border border-white/[0.08] bg-[#111114] text-zinc-100 shadow-2xl"
+          >
           {/* Header */}
           <div className="flex items-center justify-between border-b border-white/[0.08] px-6 py-4">
             <div>
@@ -910,6 +909,7 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
           </div>
         </motion.div>
       </div>
+      )}
     </AnimatePresence>
   );
 };

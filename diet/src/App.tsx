@@ -14,6 +14,7 @@ import { DataBackupModal } from './components/DataBackupModal';
 import { GlycemicWorkoutTimelineCard } from './components/GlycemicWorkoutTimelineCard';
 import { MealGlycemicModal } from './components/MealGlycemicModal';
 import { FoodItem, MealType, MealEntry } from './types/diet';
+import { formatDateToIso } from './utils/nutritionCalculations';
 import {
   Calendar,
   ChevronLeft,
@@ -21,7 +22,7 @@ import {
 } from 'lucide-react';
 
 const MainDashboard: React.FC = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, authLoading } = useAuth();
   const { selectedDate, jumpToToday, prevDay, nextDay, quickAddFood } =
     useDiet();
 
@@ -31,6 +32,15 @@ const MainDashboard: React.FC = () => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isBackupOpen, setIsBackupOpen] = useState(false);
   const [selectedMealForGlycemic, setSelectedMealForGlycemic] = useState<MealEntry | null>(null);
+
+  if (authLoading && !currentUser) {
+    return (
+      <div className="min-h-screen bg-[#09090b] flex flex-col items-center justify-center text-zinc-400">
+        <div className="h-8 w-8 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin mb-3" />
+        <span className="text-xs font-mono tracking-wider uppercase text-zinc-500">Connecting to AstraDiet Cloud Sync...</span>
+      </div>
+    );
+  }
 
   if (!currentUser) {
     return <AuthView />;
@@ -45,7 +55,7 @@ const MainDashboard: React.FC = () => {
     quickAddFood(food, mealType);
   };
 
-  const isToday = selectedDate === new Date().toISOString().split('T')[0];
+  const isToday = selectedDate === formatDateToIso(new Date());
 
   return (
     <div className="min-h-screen bg-[#09090b] text-zinc-100 flex flex-col antialiased selection:bg-white/20 selection:text-white">
