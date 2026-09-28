@@ -1,0 +1,8 @@
+{
+  "firestore": {
+    "databaseId": "ai-studio-astradiet3dmacro-038dee28-3202-4faf-9aed-577a79b90ab7",
+    "rules": "firestore.rules",
+    "edition": "ENTERPRISE",
+    "dataAccessMode": "FIRESTORE_NATIVE"
+  }
+}

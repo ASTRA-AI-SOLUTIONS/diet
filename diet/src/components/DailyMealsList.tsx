@@ -209,17 +209,18 @@ export const DailyMealsList: React.FC<DailyMealsListProps> = ({
                             <span className="font-mono text-xs font-semibold text-white tabular-nums bg-zinc-800/80 px-2 py-0.5 rounded border border-white/[0.06]">
                               {meal.calories} kcal
                             </span>
-                            <div className="flex items-center sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="flex items-center gap-1">
                               <button
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleDuplicate(meal);
                                 }}
-                                className="p-1 rounded text-zinc-400 hover:text-white cursor-pointer active:scale-90"
-                                title="Repeat item"
+                                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer active:scale-95"
+                                title="Duplicate meal item"
+                                aria-label="Duplicate meal item"
                               >
-                                <Plus className="w-3 h-3" />
+                                <Plus className="w-3.5 h-3.5" />
                               </button>
                               <button
                                 type="button"
@@ -227,10 +228,11 @@ export const DailyMealsList: React.FC<DailyMealsListProps> = ({
                                   e.stopPropagation();
                                   deleteMeal(meal.id);
                                 }}
-                                className="p-1 rounded text-zinc-400 hover:text-rose-400 cursor-pointer active:scale-90"
-                                title="Remove entry"
+                                className="p-1.5 rounded-lg text-zinc-400 hover:text-rose-400 hover:bg-rose-500/15 border border-white/[0.06] hover:border-rose-500/30 transition-all cursor-pointer active:scale-95"
+                                title={`Remove ${meal.foodName}`}
+                                aria-label={`Remove ${meal.foodName}`}
                               >
-                                <Trash2 className="w-3 h-3" />
+                                <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </div>
                           </div>

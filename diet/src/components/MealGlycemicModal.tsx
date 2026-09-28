@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MealEntry } from '../types/diet';
+import { useDiet } from '../context/DietContext';
 import {
   calculateMealGlycemicProfile,
   formatTimeTo12Hour,
@@ -16,6 +17,7 @@ import {
   Clock,
   Sparkles,
   Footprints,
+  Trash2,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
