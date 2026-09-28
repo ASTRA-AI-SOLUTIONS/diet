@@ -63,13 +63,44 @@ export const FoodLibraryView: React.FC<FoodLibraryViewProps> = ({ onAddFood }) =
 
   const searchOnlineFood = async (query: string, getIsActive: () => boolean) => {
     try {
-      const res = await fetch(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=20`, {
-        headers: { 'User-Agent': 'AstraDiet-MacroTracker/1.0' }
-      });
-      const data = await res.json();
-      if (data.products) {
-        const results: FoodItem[] = data.products
-          .filter((p: any) => p.product_name)
+      // Fetch both Indian-prioritized results and Global results simultaneously
+      const [indiaRes, globalRes] = await Promise.all([
+        fetch(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&countries_tags_en=india&search_simple=1&action=process&json=1&page_size=15`, {
+          headers: { 'User-Agent': 'AstraDiet-MacroTracker/1.0' }
+        }),
+        fetch(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=20`, {
+          headers: { 'User-Agent': 'AstraDiet-MacroTracker/1.0' }
+        })
+      ]);
+
+      const indiaData = await indiaRes.json();
+      const globalData = await globalRes.json();
+
+      let combinedProducts: any[] = [];
+      const seenIds = new Set();
+
+      // Add Indian results first
+      if (indiaData.products) {
+        indiaData.products.forEach((p: any) => {
+          if (p.product_name && !seenIds.has(p._id || p.code)) {
+            seenIds.add(p._id || p.code);
+            combinedProducts.push(p);
+          }
+        });
+      }
+
+      // Append Global results
+      if (globalData.products) {
+        globalData.products.forEach((p: any) => {
+          if (p.product_name && !seenIds.has(p._id || p.code)) {
+            seenIds.add(p._id || p.code);
+            combinedProducts.push(p);
+          }
+        });
+      }
+
+      if (combinedProducts.length > 0) {
+        const results: FoodItem[] = combinedProducts
           .map((p: any) => {
             const serving = Number(p.serving_quantity) || 100;
             const unit = p.serving_quantity_unit || 'g';
