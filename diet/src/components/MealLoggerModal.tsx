@@ -121,76 +121,48 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
 
   const searchOnlineFood = async (query: string, getIsActive: () => boolean) => {
     try {
-      // Fetch both Indian-prioritized results and Global results simultaneously
-      const [indiaRes, globalRes] = await Promise.all([
-        fetch(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&countries_tags_en=india&search_simple=1&action=process&json=1&page_size=15`, {
-          headers: { 'User-Agent': 'AstraDiet-MacroTracker/1.0' }
-        }),
-        fetch(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=20`, {
-          headers: { 'User-Agent': 'AstraDiet-MacroTracker/1.0' }
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+      if (!apiKey) {
+        console.error("VITE_GEMINI_API_KEY is missing! Cannot search Google AI.");
+        if (getIsActive()) setOnlineResults([]);
+        return;
+      }
+
+      const prompt = `You are a nutrition database. Return a JSON array of up to 6 best matching food items for the query: "${query}". Each item MUST have: id (unique string), name (descriptive name), category (string), cuisine (string), servingSize (number), servingUnit (string like 'g', 'ml', 'piece'), calories (number), protein (number), carbs (number), fats (number), fiber (number), defaultGrams (number). Return ONLY a raw valid JSON array, NO markdown formatting, NO backticks.`;
+
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }]
         })
-      ]);
+      });
 
-      const indiaData = await indiaRes.json();
-      const globalData = await globalRes.json();
-
-      let combinedProducts: any[] = [];
-      const seenIds = new Set();
-
-      // Add Indian results first
-      if (indiaData.products) {
-        indiaData.products.forEach((p: any) => {
-          if (p.product_name && !seenIds.has(p._id || p.code)) {
-            seenIds.add(p._id || p.code);
-            combinedProducts.push(p);
-          }
-        });
-      }
-
-      // Append Global results
-      if (globalData.products) {
-        globalData.products.forEach((p: any) => {
-          if (p.product_name && !seenIds.has(p._id || p.code)) {
-            seenIds.add(p._id || p.code);
-            combinedProducts.push(p);
-          }
-        });
-      }
-
-      if (combinedProducts.length > 0) {
-        const results: FoodItem[] = combinedProducts
-          .map((p: any) => {
-            const serving = Number(p.serving_quantity) || 100;
-            const unit = p.serving_quantity_unit || 'g';
-            const multiplier = serving / 100;
-            
-            const n = p.nutriments || {};
-            let kcal100 = n['energy-kcal_100g'];
-            if (kcal100 === undefined || kcal100 === null) {
-               kcal100 = n['energy_100g'] ? n['energy_100g'] / 4.184 : 0;
-            }
-            
-            return {
-              id: `online_${p._id || p.code || Math.random().toString()}`,
-              name: p.product_name + (p.brands ? ` (${p.brands.split(',')[0]})` : ''),
+      const data = await res.json();
+      
+      if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
+        let jsonText = data.candidates[0].content.parts[0].text;
+        jsonText = jsonText.replace(/```json/gi, '').replace(/```/g, '').trim();
+        
+        try {
+          const parsed = JSON.parse(jsonText);
+          if (Array.isArray(parsed) && getIsActive()) {
+            const results = parsed.map(item => ({
+              ...item,
+              id: 'online_' + (item.id || Math.random().toString()),
               category: 'Global DB',
-              cuisine: 'Global',
-              servingSize: serving,
-              servingUnit: unit,
-              calories: Math.round((kcal100 || 0) * multiplier),
-              protein: Number(((n.proteins_100g || 0) * multiplier).toFixed(1)),
-              carbs: Number(((n.carbohydrates_100g || 0) * multiplier).toFixed(1)),
-              fats: Number(((n.fat_100g || 0) * multiplier).toFixed(1)),
-              fiber: Number(((n.fiber_100g || 0) * multiplier).toFixed(1)),
-              defaultGrams: typeof serving === 'number' && unit === 'g' ? serving : 100,
-            };
-          });
-        if (getIsActive()) {
-          setOnlineResults(results);
+              cuisine: 'Global'
+            }));
+            setOnlineResults(results);
+          }
+        } catch (parseErr) {
+          console.error("Failed to parse Gemini JSON:", parseErr, jsonText);
         }
+      } else {
+         if (getIsActive()) setOnlineResults([]);
       }
     } catch (err) {
-      console.error("Failed to search online foods:", err);
+      console.error("Failed to search with Gemini AI:", err);
     } finally {
       if (getIsActive()) {
         setIsSearchingOnline(false);
