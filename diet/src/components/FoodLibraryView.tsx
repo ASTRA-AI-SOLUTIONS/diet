@@ -43,30 +43,29 @@ export const FoodLibraryView: React.FC<FoodLibraryViewProps> = ({ onAddFood }) =
 
   const displayedFoods = searchMode === 'online' ? onlineResults : filteredLocal;
 
+  
+
+    const [cachedAiFoods, setCachedAiFoods] = useState<FoodItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('astradiet_ai_cache');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+
   useEffect(() => {
-    let isActive = true;
-    if (searchMode === 'online' && searchQuery.trim().length > 2) {
-      setIsSearchingOnline(true);
-      const delayDebounceFn = setTimeout(() => {
-        if (isActive) searchOnlineFood(searchQuery.trim(), () => isActive);
-      }, 500);
+    setOnlineResults([]);
+  }, [searchQuery]);
 
-      return () => {
-        isActive = false;
-        clearTimeout(delayDebounceFn);
-      };
-    } else if (searchMode === 'online' && searchQuery.trim().length <= 2) {
-      setOnlineResults([]);
-      setIsSearchingOnline(false);
-    }
-  }, [searchQuery, searchMode]);
+  const searchOnlineFood = async (manualQuery?: string) => {
+    const query = (manualQuery || searchQuery).trim();
+    if (query.length < 2) return;
+    setIsSearchingOnline(true);
+    setOnlineResults([]);
 
-  const searchOnlineFood = async (query: string, getIsActive: () => boolean) => {
     try {
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
       if (!apiKey) {
-        console.error("VITE_GEMINI_API_KEY is missing! Cannot search Google AI.");
-        if (getIsActive()) setOnlineResults([]);
+        alert("Please add VITE_GEMINI_API_KEY to your environment variables to use AI search.");
         return;
       }
 
@@ -88,11 +87,11 @@ export const FoodLibraryView: React.FC<FoodLibraryViewProps> = ({ onAddFood }) =
         
         try {
           const parsed = JSON.parse(jsonText);
-          if (Array.isArray(parsed) && getIsActive()) {
+          if (Array.isArray(parsed)) {
             const results = parsed.map(item => ({
               ...item,
               id: 'online_' + (item.id || Math.random().toString()),
-              category: 'Global DB',
+              category: 'AI Global DB',
               cuisine: 'Global'
             }));
             setOnlineResults(results);
@@ -100,19 +99,22 @@ export const FoodLibraryView: React.FC<FoodLibraryViewProps> = ({ onAddFood }) =
         } catch (parseErr) {
           console.error("Failed to parse Gemini JSON:", parseErr, jsonText);
         }
-      } else {
-         if (getIsActive()) setOnlineResults([]);
       }
     } catch (err) {
       console.error("Failed to search with Gemini AI:", err);
     } finally {
-      if (getIsActive()) {
-        setIsSearchingOnline(false);
-      }
+      setIsSearchingOnline(false);
     }
   };
-
   const handleQuickAdd = (food: FoodItem) => {
+    if (food.id.startsWith('online_')) {
+      const exists = cachedAiFoods.find(f => f.name === food.name);
+      if (!exists) {
+        const updatedCache = [...cachedAiFoods, food];
+        setCachedAiFoods(updatedCache);
+        localStorage.setItem('astradiet_ai_cache', JSON.stringify(updatedCache));
+      }
+    }
     onAddFood(food, selectedMealType);
     setRecentlyAddedId(food.id);
     setTimeout(() => {
@@ -176,7 +178,7 @@ export const FoodLibraryView: React.FC<FoodLibraryViewProps> = ({ onAddFood }) =
               <button
                 onClick={() => {
                   setSearchMode('online');
-                  if (searchQuery.trim().length > 2) searchOnlineFood(searchQuery, () => true);
+                  if (searchQuery.trim().length > 2) searchOnlineFood(searchQuery);
                 }}
                 className={`px-2 py-1 text-[10px] font-semibold rounded-md transition-all flex items-center gap-1 ${
                   searchMode === 'online' ? 'bg-indigo-500 text-white' : 'text-zinc-400 hover:text-zinc-200'

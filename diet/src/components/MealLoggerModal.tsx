@@ -83,7 +83,8 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
 
   const filteredFoods = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    return FOOD_DATABASE.filter((food) => {
+    const combinedDB = [...FOOD_DATABASE, ...cachedAiFoods];
+    return combinedDB.filter((food) => {
       const matchesSearch =
         !q ||
         food.name.toLowerCase().includes(q) ||
@@ -102,29 +103,29 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
     });
   }, [searchQuery, selectedCategory]);
 
+  
+
+    const [cachedAiFoods, setCachedAiFoods] = useState<FoodItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('astradiet_ai_cache');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+
   useEffect(() => {
-    let isActive = true;
-    if (searchQuery.trim().length > 2) {
-      setIsSearchingOnline(true);
-      const delayDebounceFn = setTimeout(() => {
-        if (isActive) searchOnlineFood(searchQuery.trim(), () => isActive);
-      }, 500);
-      return () => {
-        isActive = false;
-        clearTimeout(delayDebounceFn);
-      };
-    } else {
-      setOnlineResults([]);
-      setIsSearchingOnline(false);
-    }
+    setOnlineResults([]);
   }, [searchQuery]);
 
-  const searchOnlineFood = async (query: string, getIsActive: () => boolean) => {
+  const searchOnlineFood = async () => {
+    const query = searchQuery.trim();
+    if (query.length < 2) return;
+    setIsSearchingOnline(true);
+    setOnlineResults([]); // clear previous
+
     try {
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
       if (!apiKey) {
-        console.error("VITE_GEMINI_API_KEY is missing! Cannot search Google AI.");
-        if (getIsActive()) setOnlineResults([]);
+        alert("Please add VITE_GEMINI_API_KEY to your environment variables to use AI search.");
         return;
       }
 
@@ -146,11 +147,11 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
         
         try {
           const parsed = JSON.parse(jsonText);
-          if (Array.isArray(parsed) && getIsActive()) {
+          if (Array.isArray(parsed)) {
             const results = parsed.map(item => ({
               ...item,
               id: 'online_' + (item.id || Math.random().toString()),
-              category: 'Global DB',
+              category: 'AI AI DB',
               cuisine: 'Global'
             }));
             setOnlineResults(results);
@@ -158,19 +159,24 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
         } catch (parseErr) {
           console.error("Failed to parse Gemini JSON:", parseErr, jsonText);
         }
-      } else {
-         if (getIsActive()) setOnlineResults([]);
       }
     } catch (err) {
       console.error("Failed to search with Gemini AI:", err);
     } finally {
-      if (getIsActive()) {
-        setIsSearchingOnline(false);
-      }
+      setIsSearchingOnline(false);
     }
   };
 
   const handleSelectFood = (food: FoodItem) => {
+    if (food.id.startsWith('online_')) {
+      // Save to cache
+      const exists = cachedAiFoods.find(f => f.name === food.name);
+      if (!exists) {
+        const updatedCache = [...cachedAiFoods, food];
+        setCachedAiFoods(updatedCache);
+        localStorage.setItem('astradiet_ai_cache', JSON.stringify(updatedCache));
+      }
+    }
     const refGrams = getFoodReferenceGrams(food);
     setSelectedFood(food);
     setMultiplier(1);
@@ -787,15 +793,28 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
 
                 {/* Food List */}
                 <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+                  
+                  {searchQuery.trim().length > 2 && !isSearchingOnline && onlineResults.length === 0 && (
+                    <div className="p-4 mb-2 rounded-xl border border-indigo-500/20 bg-indigo-500/5 flex flex-col items-center justify-center gap-2">
+                      <span className="text-xs text-indigo-300 text-center">Can't find what you're looking for?</span>
+                      <button 
+                        onClick={searchOnlineFood}
+                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm shadow-indigo-900/20"
+                      >
+                        <Zap className="w-3.5 h-3.5" /> Search with AI
+                      </button>
+                    </div>
+                  )}
+
                   {filteredFoods.length === 0 && !isSearchingOnline && onlineResults.length === 0 && (
                     <div className="py-8 text-center text-zinc-500 text-xs">
-                      No foods matching &ldquo;{searchQuery}&rdquo;. Try another term or create a custom entry.
+                      No foods matching &ldquo;{searchQuery}&rdquo;. Try the AI search or create a custom entry.
                     </div>
                   )}
                   {isSearchingOnline && (
                     <div className="flex flex-col items-center justify-center py-8 text-zinc-400 gap-3">
                       <Loader2 className="w-5 h-5 animate-spin text-indigo-500" />
-                      <span className="text-xs font-medium">Searching global database for "{searchQuery}"...</span>
+                      <span className="text-xs font-medium">AI is calculating macros for "{searchQuery}"...</span>
                     </div>
                   )}
                   {[...filteredFoods, ...onlineResults].map((food) => (
@@ -818,7 +837,7 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
                             )}
                             {food.id.startsWith('online_') && (
                               <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 font-medium whitespace-nowrap flex items-center gap-1">
-                                <Globe className="w-2.5 h-2.5" /> Global DB
+                                <Globe className="w-2.5 h-2.5" /> AI DB
                               </span>
                             )}
                           </div>
