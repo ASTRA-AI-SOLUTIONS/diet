@@ -3,6 +3,8 @@ import { UserProfile } from '../types/diet';
 import { auth, db, googleProvider } from '../firebase';
 import {
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut,
   onAuthStateChanged,
   User,
@@ -73,6 +75,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     let unsubscribeFirestore: (() => void) | null = null;
 
+    // Check for redirect result when returning from Google redirect auth
+    getRedirectResult(auth)
+      .then(async (result) => {
+        if (result && result.user) {
+          const fbUser = result.user;
+          const userDocRef = doc(db, 'users', fbUser.uid);
+          const snap = await getDoc(userDocRef);
+          if (snap.exists()) {
+            const data = snap.data() as UserProfile;
+            setCurrentUser({ ...data, id: fbUser.uid });
+            setPendingGoogleUser(null);
+          } else {
+            setPendingGoogleUser({
+              name: fbUser.displayName || 'Athlete',
+              email: fbUser.email || '',
+              uid: fbUser.uid,
+            });
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn('Redirect auth result error:', err);
+      });
+
     const unsubscribeAuth = onAuthStateChanged(auth, async (fbUser) => {
       setFirebaseUser(fbUser);
 
@@ -90,7 +116,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             } else {
               // Authenticated with Google but no profile doc created yet
               setPendingGoogleUser({
-                name: fbUser.displayName || '',
+                name: fbUser.displayName || 'Athlete',
                 email: fbUser.email || '',
                 uid: fbUser.uid,
               });
@@ -119,9 +145,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const signInWithGoogle = async (): Promise<boolean> => {
-    setAuthLoading(true);
     try {
-      const result = await signInWithPopup(auth, googleProvider);
+      let result;
+      try {
+        result = await signInWithPopup(auth, googleProvider);
+      } catch (popupErr: unknown) {
+        const pErr = popupErr as { code?: string };
+        // If popup was blocked by browser or iframe constraints, try redirect flow
+        if (pErr.code === 'auth/popup-blocked') {
+          console.warn('Popup blocked, attempting signInWithRedirect fallback');
+          await signInWithRedirect(auth, googleProvider);
+          return false;
+        }
+        throw popupErr;
+      }
+
       const fbUser = result.user;
 
       // Check if profile document already exists
@@ -132,19 +170,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const data = snap.data() as UserProfile;
         setCurrentUser({ ...data, id: fbUser.uid });
         setPendingGoogleUser(null);
-        setAuthLoading(false);
         return true;
       } else {
         setPendingGoogleUser({
-          name: fbUser.displayName || '',
+          name: fbUser.displayName || 'Athlete',
           email: fbUser.email || '',
           uid: fbUser.uid,
         });
-        setAuthLoading(false);
         return false;
       }
     } catch (error) {
-      setAuthLoading(false);
       console.error('Google sign in error:', error);
       throw error;
     }
@@ -153,20 +188,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const register = async (
     data: Omit<UserProfile, 'id' | 'createdAt'>
   ): Promise<UserProfile> => {
-    const userId = firebaseUser?.uid || pendingGoogleUser?.uid || auth.currentUser?.uid;
-    if (!userId) {
-      throw new Error('Please sign in with Google to create your athlete protocol.');
-    }
+    const userId =
+      firebaseUser?.uid ||
+      pendingGoogleUser?.uid ||
+      auth.currentUser?.uid ||
+      `athlete_${Date.now()}`;
+
     const newUser: UserProfile = {
       ...data,
       id: userId,
       createdAt: new Date().toISOString(),
     };
 
-    // Save to Firestore
+    // Save to Firestore if authenticated with Google
     try {
-      const userDocRef = doc(db, 'users', userId);
-      await setDoc(userDocRef, newUser);
+      if (auth.currentUser && auth.currentUser.uid === userId) {
+        const userDocRef = doc(db, 'users', userId);
+        await setDoc(userDocRef, newUser);
+      }
     } catch (err) {
       console.warn('Saving profile to firestore error:', err);
     }

@@ -31,7 +31,7 @@ export const TopNav: React.FC<TopNavProps> = ({
   activeSection,
   setActiveSection,
 }) => {
-  const { currentUser, users, switchUser, logout } = useAuth();
+  const { currentUser, users, switchUser, logout, firebaseUser, signInWithGoogle } = useAuth();
   const { selectedDate, setSelectedDate, jumpToToday, prevDay, nextDay } = useDiet();
 
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
@@ -168,10 +168,25 @@ export const TopNav: React.FC<TopNavProps> = ({
                       Target: {currentUser.targets.calories} kcal ·{' '}
                       {currentUser.goal.replace('_', ' ')}
                     </div>
-                    <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-semibold mt-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded px-2 py-0.5 w-fit">
-                      <Cloud className="w-3 h-3" />
-                      <span>Cloud Sync Active</span>
-                    </div>
+                    {firebaseUser ? (
+                      <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-semibold mt-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded px-2 py-0.5 w-fit">
+                        <Cloud className="w-3 h-3" />
+                        <span>Cloud Sync Active</span>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUserDropdownOpen(false);
+                          signInWithGoogle();
+                        }}
+                        className="flex items-center gap-1.5 text-[10px] text-amber-400 font-semibold mt-1.5 bg-amber-500/10 border border-amber-500/20 rounded px-2 py-0.5 w-fit hover:bg-amber-500/20 transition-colors cursor-pointer"
+                        title="Link Google account to sync all data across mobile and desktop"
+                      >
+                        <Cloud className="w-3 h-3" />
+                        <span>Connect Google Sync</span>
+                      </button>
+                    )}
                   </div>
 
                   <div className="py-1">

@@ -42,7 +42,7 @@ const MainDashboard: React.FC = () => {
     );
   }
 
-  if (!currentUser || !firebaseUser) {
+  if (!currentUser) {
     return <AuthView />;
   }
 

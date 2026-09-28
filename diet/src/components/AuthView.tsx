@@ -29,8 +29,13 @@ export const AuthView: React.FC<AuthViewProps> = ({ onSuccess }) => {
 
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [googleError, setGoogleError] = useState('');
+  const [isManualSetup, setIsManualSetup] = useState(false);
 
-  // Biometrics setup state (used when first signing in with Google)
+  // Manual Athlete Name & Email if not using Google
+  const [athleteName, setAthleteName] = useState('Athlete');
+  const [athleteEmail, setAthleteEmail] = useState('athlete@astradiet.app');
+
+  // Biometrics setup state (used when first signing in with Google or manually)
   const [gender, setGender] = useState<Gender>('male');
   const [age, setAge] = useState<string | number>(26);
   const [heightCm, setHeightCm] = useState<string | number>(178);
@@ -68,8 +73,19 @@ export const AuthView: React.FC<AuthViewProps> = ({ onSuccess }) => {
       }
     } catch (err: unknown) {
       console.error('Google Sign In Error', err);
-      const msg = err instanceof Error ? err.message : 'Failed to sign in with Google.';
-      setGoogleError(msg);
+      const pErr = err as { code?: string; message?: string };
+      if (pErr.code === 'auth/unauthorized-domain') {
+        setGoogleError(
+          `Google OAuth requires adding this domain (${window.location.hostname}) to Firebase Console > Authentication > Settings > Authorized Domains. You can launch your athlete protocol directly below in the meantime!`
+        );
+      } else if (pErr.code === 'auth/popup-blocked') {
+        setGoogleError('Popup blocked by browser. Please allow popups or tap Continue with Google again.');
+      } else if (pErr.code === 'auth/popup-closed-by-user') {
+        setGoogleError('Sign-in cancelled. Tap Continue with Google to retry.');
+      } else {
+        const msg = err instanceof Error ? err.message : 'Failed to connect to Google account.';
+        setGoogleError(msg);
+      }
     } finally {
       setIsGoogleLoading(false);
     }
@@ -77,11 +93,13 @@ export const AuthView: React.FC<AuthViewProps> = ({ onSuccess }) => {
 
   const handleCompleteSetup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!pendingGoogleUser) return;
+
+    const nameToUse = pendingGoogleUser?.name || athleteName.trim() || 'Athlete';
+    const emailToUse = pendingGoogleUser?.email || athleteEmail.trim() || 'athlete@astradiet.app';
 
     await register({
-      name: pendingGoogleUser.name || 'Athlete',
-      email: pendingGoogleUser.email,
+      name: nameToUse,
+      email: emailToUse,
       avatarColor: 'from-zinc-400 to-zinc-600',
       gender,
       age: numAge,
@@ -117,7 +135,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onSuccess }) => {
         {/* Card Container */}
         <div className="rounded-2xl border border-white/[0.08] bg-[#111114] p-6 shadow-2xl">
           <AnimatePresence mode="wait">
-            {!pendingGoogleUser ? (
+            {!pendingGoogleUser && !isManualSetup ? (
               /* PRIMARY GOOGLE SIGN-IN SCREEN */
               <motion.div
                 key="google-sign-in"
@@ -166,15 +184,37 @@ export const AuthView: React.FC<AuthViewProps> = ({ onSuccess }) => {
                       />
                     </svg>
                     <span>
-                      {isGoogleLoading ? 'Connecting to Cloud Account...' : 'Continue with Google'}
+                      {isGoogleLoading ? 'Connecting to Google...' : 'Continue with Google'}
                     </span>
                   </button>
 
                   {googleError && (
-                    <div className="text-xs text-rose-400 text-center font-medium bg-rose-500/10 border border-rose-500/20 rounded-xl p-3">
-                      {googleError}
+                    <div className="text-xs text-rose-300 text-left font-normal bg-rose-500/10 border border-rose-500/20 rounded-xl p-3 space-y-2">
+                      <div className="font-semibold text-rose-200">{googleError}</div>
+                      <button
+                        type="button"
+                        onClick={() => setIsManualSetup(true)}
+                        className="w-full text-center py-2 px-3 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white font-medium text-xs transition-colors cursor-pointer"
+                      >
+                        Launch Athlete Protocol Directly &rarr;
+                      </button>
                     </div>
                   )}
+
+                  <div className="relative flex py-1 items-center">
+                    <div className="flex-grow border-t border-white/[0.06]"></div>
+                    <span className="flex-shrink mx-3 text-[11px] text-zinc-500 uppercase font-mono">or</span>
+                    <div className="flex-grow border-t border-white/[0.06]"></div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsManualSetup(true)}
+                    className="w-full flex items-center justify-center gap-2 rounded-xl border border-white/[0.08] bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 hover:text-white py-2.5 px-4 font-semibold transition-all text-xs cursor-pointer active:scale-[0.99]"
+                  >
+                    <span>Setup Protocol on this Device</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
                 </div>
 
                 {/* Multi-Device Sync Benefits */}
@@ -201,7 +241,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onSuccess }) => {
                 </div>
               </motion.div>
             ) : (
-              /* ONBOARDING PROTOCOL SETUP FOR NEW GOOGLE USER */
+              /* ONBOARDING PROTOCOL SETUP */
               <motion.div
                 key="onboarding-setup"
                 initial={{ opacity: 0, y: 8 }}
@@ -210,23 +250,68 @@ export const AuthView: React.FC<AuthViewProps> = ({ onSuccess }) => {
                 className="space-y-4"
               >
                 <div className="pb-3 border-b border-white/[0.08]">
-                  <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                    <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">
-                      Cloud Account Connected
-                    </span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                      <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">
+                        {pendingGoogleUser ? 'Google Account Connected' : 'Device Protocol Setup'}
+                      </span>
+                    </div>
+                    {!pendingGoogleUser && (
+                      <button
+                        type="button"
+                        onClick={() => setIsManualSetup(false)}
+                        className="text-[11px] text-zinc-400 hover:text-white cursor-pointer"
+                      >
+                        Back to Login
+                      </button>
+                    )}
                   </div>
                   <h3 className="text-lg font-bold text-white mt-1">
-                    Complete Your Athlete Protocol
+                    Calibrate Your Athlete Protocol
                   </h3>
-                  <div className="flex items-center gap-1.5 text-xs text-zinc-400 mt-1">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                    <span className="font-semibold text-zinc-200">{pendingGoogleUser.name}</span>
-                    <span>({pendingGoogleUser.email})</span>
-                  </div>
+                  {pendingGoogleUser ? (
+                    <div className="flex items-center gap-1.5 text-xs text-zinc-400 mt-1">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                      <span className="font-semibold text-zinc-200">{pendingGoogleUser.name}</span>
+                      <span>({pendingGoogleUser.email})</span>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      Configure your biological metrics to model exact daily energy expenditure and macronutrient splits.
+                    </p>
+                  )}
                 </div>
 
                 <form onSubmit={handleCompleteSetup} className="space-y-4">
+                  {!pendingGoogleUser && (
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div>
+                        <label className="block text-[11px] text-zinc-300 font-semibold mb-1">
+                          Athlete Name
+                        </label>
+                        <input
+                          type="text"
+                          value={athleteName}
+                          onChange={(e) => setAthleteName(e.target.value)}
+                          placeholder="e.g. Sarovar"
+                          className="w-full rounded-lg border border-white/[0.08] bg-zinc-950 px-3 py-1.5 text-xs text-white focus:border-zinc-400 focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] text-zinc-300 font-semibold mb-1">
+                          Email
+                        </label>
+                        <input
+                          type="email"
+                          value={athleteEmail}
+                          onChange={(e) => setAthleteEmail(e.target.value)}
+                          placeholder="athlete@domain.com"
+                          className="w-full rounded-lg border border-white/[0.08] bg-zinc-950 px-3 py-1.5 text-xs text-white focus:border-zinc-400 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  )}
                   {/* Sex Selector */}
                   <div>
                     <label className="block text-xs font-semibold text-zinc-300 mb-1">
