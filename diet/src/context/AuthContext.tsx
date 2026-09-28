@@ -18,6 +18,18 @@ import {
 } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from '../utils/firestoreErrors';
 
+export function emailToUserId(email: string): string {
+  const clean = email.trim().toLowerCase();
+  let hash = 0;
+  for (let i = 0; i < clean.length; i++) {
+    hash = ((hash << 5) - hash) + clean.charCodeAt(i);
+    hash |= 0;
+  }
+  const prefix = clean.replace(/[^a-z0-9]/g, '_').slice(0, 24);
+  const positiveHash = Math.abs(hash).toString(36);
+  return `ath_${prefix}_${positiveHash}`;
+}
+
 interface AuthContextType {
   currentUser: UserProfile | null;
   firebaseUser: User | null;
@@ -27,6 +39,12 @@ interface AuthContextType {
   clearPendingGoogleUser: () => void;
   signInWithGoogle: () => Promise<boolean>;
   login: (email: string) => boolean;
+  loginWithCloudId: (cloudId: string) => Promise<boolean>;
+  loginWithEmailAndPasscode: (
+    email: string,
+    passcode?: string
+  ) => Promise<{ success: boolean; requiresRegister?: boolean; error?: string }>;
+  emailToUserId: (email: string) => string;
   register: (newUser: Omit<UserProfile, 'id' | 'createdAt'>) => Promise<UserProfile>;
   logout: () => Promise<void>;
   switchUser: (userId: string) => void;
@@ -144,6 +162,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
+  // Real-time synchronization for active athlete profile (cross-device sync)
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    const userDocRef = doc(db, 'users', currentUser.id);
+    const unsub = onSnapshot(
+      userDocRef,
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data() as UserProfile;
+          setCurrentUser((prev) => (prev ? { ...data, id: currentUser.id } : null));
+        }
+      },
+      (err) => {
+        console.warn('Real-time profile listener error:', err);
+      }
+    );
+    return () => unsub();
+  }, [currentUser?.id]);
+
   const signInWithGoogle = async (): Promise<boolean> => {
     try {
       let result;
@@ -185,12 +222,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const loginWithEmailAndPasscode = async (
+    email: string,
+    passcode?: string
+  ): Promise<{ success: boolean; requiresRegister?: boolean; error?: string }> => {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      return { success: false, error: 'Please enter a valid email address.' };
+    }
+    const userId = emailToUserId(cleanEmail);
+    try {
+      const userDocRef = doc(db, 'users', userId);
+      const snap = await getDoc(userDocRef);
+      if (snap.exists()) {
+        const data = snap.data() as UserProfile;
+        // If profile has a passcode, verify it
+        if (data.passcode && passcode && data.passcode.trim() !== passcode.trim()) {
+          return { success: false, error: 'Incorrect passcode for this athlete account.' };
+        }
+        setCurrentUser({ ...data, id: userId });
+        return { success: true };
+      } else {
+        return { success: false, requiresRegister: true };
+      }
+    } catch (err) {
+      console.warn('Error during cloud login:', err);
+      return { success: false, error: 'Unable to connect to cloud database.' };
+    }
+  };
+
   const register = async (
     data: Omit<UserProfile, 'id' | 'createdAt'>
   ): Promise<UserProfile> => {
     const userId =
       firebaseUser?.uid ||
       pendingGoogleUser?.uid ||
+      (data.email ? emailToUserId(data.email) : null) ||
       auth.currentUser?.uid ||
       `athlete_${Date.now()}`;
 
@@ -200,12 +267,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       createdAt: new Date().toISOString(),
     };
 
-    // Save to Firestore if authenticated with Google
+    // Save to Firestore
     try {
-      if (auth.currentUser && auth.currentUser.uid === userId) {
-        const userDocRef = doc(db, 'users', userId);
-        await setDoc(userDocRef, newUser);
-      }
+      const userDocRef = doc(db, 'users', userId);
+      await setDoc(userDocRef, newUser, { merge: true });
     } catch (err) {
       console.warn('Saving profile to firestore error:', err);
     }
@@ -213,6 +278,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCurrentUser(newUser);
     setPendingGoogleUser(null);
     return newUser;
+  };
+
+  const loginWithCloudId = async (cloudId: string): Promise<boolean> => {
+    const cleanId = cloudId.trim();
+    if (!cleanId) return false;
+    try {
+      const userDocRef = doc(db, 'users', cleanId);
+      const snap = await getDoc(userDocRef);
+      if (snap.exists()) {
+        const data = snap.data() as UserProfile;
+        setCurrentUser({ ...data, id: cleanId });
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.warn('Error logging in with cloud id:', err);
+      return false;
+    }
   };
 
   const login = (email: string): boolean => {
@@ -284,6 +367,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         clearPendingGoogleUser,
         signInWithGoogle,
         login,
+        loginWithCloudId,
+        loginWithEmailAndPasscode,
+        emailToUserId,
         register,
         logout,
         switchUser,

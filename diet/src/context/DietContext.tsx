@@ -110,9 +110,9 @@ export const DietProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [dailyLogs]);
 
-  // Real-time Firestore sync when a user is signed in
+  // Real-time Firestore sync when a user is signed in or active
   useEffect(() => {
-    if (!currentUser?.id || !firebaseUser || firebaseUser.uid !== currentUser.id) {
+    if (!currentUser?.id) {
       return;
     }
 
@@ -151,7 +151,7 @@ export const DietProvider: React.FC<{ children: React.ReactNode }> = ({ children
       unsubMeals();
       unsubLogs();
     };
-  }, [currentUser?.id, firebaseUser]);
+  }, [currentUser?.id]);
 
   const jumpToToday = () => {
     setSelectedDate(formatDateToIso(new Date()));
@@ -198,10 +198,8 @@ export const DietProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (!currentUser) return;
     try {
-      if (firebaseUser && firebaseUser.uid === currentUser.id) {
-        const logRef = doc(db, 'users', currentUser.id, 'dailyLogs', selectedDate);
-        await setDoc(logRef, { date: selectedDate, waterMl: clamped }, { merge: true });
-      }
+      const logRef = doc(db, 'users', currentUser.id, 'dailyLogs', selectedDate);
+      await setDoc(logRef, { date: selectedDate, waterMl: clamped }, { merge: true });
     } catch (err) {
       console.warn('Error saving water log to firestore:', err);
     }
@@ -297,12 +295,10 @@ export const DietProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Optimistically update local state
     setMeals((prev) => [...prev, newMeal]);
 
-    // Save to Firestore if authenticated
+    // Save to Firestore
     try {
-      if (firebaseUser && firebaseUser.uid === currentUser.id) {
-        const mealRef = doc(db, 'users', currentUser.id, 'meals', mealId);
-        await setDoc(mealRef, newMeal);
-      }
+      const mealRef = doc(db, 'users', currentUser.id, 'meals', mealId);
+      await setDoc(mealRef, newMeal);
     } catch (err) {
       console.warn('Error saving meal to firestore:', err);
     }
@@ -312,10 +308,8 @@ export const DietProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setMeals((prev) => prev.map((m) => (m.id === id ? { ...m, ...entry } : m)));
     if (!currentUser) return;
     try {
-      if (firebaseUser && firebaseUser.uid === currentUser.id) {
-        const mealRef = doc(db, 'users', currentUser.id, 'meals', id);
-        await setDoc(mealRef, entry, { merge: true });
-      }
+      const mealRef = doc(db, 'users', currentUser.id, 'meals', id);
+      await setDoc(mealRef, entry, { merge: true });
     } catch (err) {
       console.warn('Error updating meal in firestore:', err);
     }
@@ -325,10 +319,8 @@ export const DietProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setMeals((prev) => prev.filter((m) => m.id !== id));
     if (!currentUser) return;
     try {
-      if (firebaseUser && firebaseUser.uid === currentUser.id) {
-        const mealRef = doc(db, 'users', currentUser.id, 'meals', id);
-        await deleteDoc(mealRef);
-      }
+      const mealRef = doc(db, 'users', currentUser.id, 'meals', id);
+      await deleteDoc(mealRef);
     } catch (err) {
       console.warn('Error deleting meal from firestore:', err);
     }
@@ -377,11 +369,9 @@ export const DietProvider: React.FC<{ children: React.ReactNode }> = ({ children
       prev.filter((m) => !(m.userId === currentUser.id && m.date === selectedDate))
     );
     try {
-      if (firebaseUser && firebaseUser.uid === currentUser.id) {
-        await Promise.all(
-          toDelete.map((m) => deleteDoc(doc(db, 'users', currentUser.id, 'meals', m.id)))
-        );
-      }
+      await Promise.all(
+        toDelete.map((m) => deleteDoc(doc(db, 'users', currentUser.id, 'meals', m.id)))
+      );
     } catch (err) {
       console.warn('Error clearing day meals in firestore:', err);
     }

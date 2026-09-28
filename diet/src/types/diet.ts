@@ -43,6 +43,7 @@ export interface UserProfile {
     fatsPct: number;
   };
   targets: MacroTargets;
+  passcode?: string;
   createdAt: string;
 }
 

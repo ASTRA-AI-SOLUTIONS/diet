@@ -14,6 +14,8 @@ import {
   Sliders,
   Trash2,
   Cloud,
+  Copy,
+  Check,
 } from 'lucide-react';
 
 interface TopNavProps {
@@ -31,10 +33,19 @@ export const TopNav: React.FC<TopNavProps> = ({
   activeSection,
   setActiveSection,
 }) => {
-  const { currentUser, users, switchUser, logout, firebaseUser, signInWithGoogle } = useAuth();
+  const { currentUser, users, switchUser, logout } = useAuth();
   const { selectedDate, setSelectedDate, jumpToToday, prevDay, nextDay } = useDiet();
 
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const [copiedId, setCopiedId] = useState(false);
+
+  const handleCopyId = () => {
+    if (currentUser?.id) {
+      navigator.clipboard.writeText(currentUser.id);
+      setCopiedId(true);
+      setTimeout(() => setCopiedId(false), 2000);
+    }
+  };
 
   const isToday =
     selectedDate === new Date().toISOString().split('T')[0];
@@ -168,29 +179,33 @@ export const TopNav: React.FC<TopNavProps> = ({
                       Target: {currentUser.targets.calories} kcal ·{' '}
                       {currentUser.goal.replace('_', ' ')}
                     </div>
-                    {firebaseUser ? (
-                      <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-semibold mt-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded px-2 py-0.5 w-fit">
-                        <Cloud className="w-3 h-3" />
-                        <span>Cloud Sync Active</span>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setUserDropdownOpen(false);
-                          signInWithGoogle();
-                        }}
-                        className="flex items-center gap-1.5 text-[10px] text-amber-400 font-semibold mt-1.5 bg-amber-500/10 border border-amber-500/20 rounded px-2 py-0.5 w-fit hover:bg-amber-500/20 transition-colors cursor-pointer"
-                        title="Link Google account to sync all data across mobile and desktop"
-                      >
-                        <Cloud className="w-3 h-3" />
-                        <span>Connect Google Sync</span>
-                      </button>
-                    )}
+                    <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-semibold mt-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded px-2 py-0.5 w-fit">
+                      <Cloud className="w-3 h-3" />
+                      <span>Cloud Sync Active</span>
+                    </div>
                   </div>
 
-                  <div className="py-1">
+                  <div className="py-1 space-y-0.5">
                     <button
+                      type="button"
+                      onClick={handleCopyId}
+                      className="w-full flex items-center justify-between rounded-lg px-2.5 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors text-left cursor-pointer"
+                      title="Copy your Athlete Sync ID to load this data on another device"
+                    >
+                      <div className="flex items-center gap-2">
+                        {copiedId ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5 text-zinc-400" />
+                        )}
+                        <span>{copiedId ? 'Sync ID Copied!' : 'Copy Cloud Sync ID'}</span>
+                      </div>
+                      <span className="font-mono text-[10px] text-zinc-500 truncate max-w-[70px]">
+                        {currentUser.id.slice(0, 10)}...
+                      </span>
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => {
                         setUserDropdownOpen(false);
                         onOpenProfile();
