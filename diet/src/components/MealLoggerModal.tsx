@@ -103,18 +103,23 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
   }, [searchQuery, selectedCategory]);
 
   useEffect(() => {
+    let isActive = true;
     if (searchQuery.trim().length > 2) {
+      setIsSearchingOnline(true);
       const delayDebounceFn = setTimeout(() => {
-        searchOnlineFood(searchQuery.trim());
-      }, 600);
-      return () => clearTimeout(delayDebounceFn);
+        if (isActive) searchOnlineFood(searchQuery.trim(), () => isActive);
+      }, 500);
+      return () => {
+        isActive = false;
+        clearTimeout(delayDebounceFn);
+      };
     } else {
       setOnlineResults([]);
+      setIsSearchingOnline(false);
     }
   }, [searchQuery]);
 
-  const searchOnlineFood = async (query: string) => {
-    setIsSearchingOnline(true);
+  const searchOnlineFood = async (query: string, getIsActive: () => boolean) => {
     try {
       const res = await fetch(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=20`, {
         headers: { 'User-Agent': 'AstraDiet-MacroTracker/1.0' }
@@ -149,12 +154,16 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
               defaultGrams: typeof serving === 'number' && unit === 'g' ? serving : 100,
             };
           });
-        setOnlineResults(results);
+        if (getIsActive()) {
+          setOnlineResults(results);
+        }
       }
     } catch (err) {
       console.error("Failed to search online foods:", err);
     } finally {
-      setIsSearchingOnline(false);
+      if (getIsActive()) {
+        setIsSearchingOnline(false);
+      }
     }
   };
 

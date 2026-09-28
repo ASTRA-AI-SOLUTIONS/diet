@@ -44,19 +44,24 @@ export const FoodLibraryView: React.FC<FoodLibraryViewProps> = ({ onAddFood }) =
   const displayedFoods = searchMode === 'online' ? onlineResults : filteredLocal;
 
   useEffect(() => {
+    let isActive = true;
     if (searchMode === 'online' && searchQuery.trim().length > 2) {
+      setIsSearchingOnline(true);
       const delayDebounceFn = setTimeout(() => {
-        searchOnlineFood(searchQuery.trim());
-      }, 600);
+        if (isActive) searchOnlineFood(searchQuery.trim(), () => isActive);
+      }, 500);
 
-      return () => clearTimeout(delayDebounceFn);
+      return () => {
+        isActive = false;
+        clearTimeout(delayDebounceFn);
+      };
     } else if (searchMode === 'online' && searchQuery.trim().length <= 2) {
       setOnlineResults([]);
+      setIsSearchingOnline(false);
     }
   }, [searchQuery, searchMode]);
 
-  const searchOnlineFood = async (query: string) => {
-    setIsSearchingOnline(true);
+  const searchOnlineFood = async (query: string, getIsActive: () => boolean) => {
     try {
       const res = await fetch(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=20`, {
         headers: { 'User-Agent': 'AstraDiet-MacroTracker/1.0' }
@@ -91,12 +96,14 @@ export const FoodLibraryView: React.FC<FoodLibraryViewProps> = ({ onAddFood }) =
               defaultGrams: typeof serving === 'number' && unit === 'g' ? serving : 100,
             };
           });
-        setOnlineResults(results);
+        if (getIsActive()) {
+          setOnlineResults(results);
+        }
       }
     } catch (err) {
       console.error("Failed to search online foods:", err);
     } finally {
-      setIsSearchingOnline(false);
+      if (getIsActive()) setIsSearchingOnline(false);
     }
   };
 
@@ -164,7 +171,7 @@ export const FoodLibraryView: React.FC<FoodLibraryViewProps> = ({ onAddFood }) =
               <button
                 onClick={() => {
                   setSearchMode('online');
-                  if (searchQuery.trim().length > 2) searchOnlineFood(searchQuery);
+                  if (searchQuery.trim().length > 2) searchOnlineFood(searchQuery, () => true);
                 }}
                 className={`px-2 py-1 text-[10px] font-semibold rounded-md transition-all flex items-center gap-1 ${
                   searchMode === 'online' ? 'bg-indigo-500 text-white' : 'text-zinc-400 hover:text-zinc-200'
