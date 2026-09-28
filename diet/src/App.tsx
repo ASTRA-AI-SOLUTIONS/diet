@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 
 const MainDashboard: React.FC = () => {
-  const { currentUser, authLoading } = useAuth();
+  const { currentUser, authLoading, firebaseUser } = useAuth();
   const { selectedDate, jumpToToday, prevDay, nextDay, quickAddFood } =
     useDiet();
 
@@ -33,7 +33,7 @@ const MainDashboard: React.FC = () => {
   const [isBackupOpen, setIsBackupOpen] = useState(false);
   const [selectedMealForGlycemic, setSelectedMealForGlycemic] = useState<MealEntry | null>(null);
 
-  if (authLoading && !currentUser) {
+  if (authLoading) {
     return (
       <div className="min-h-screen bg-[#09090b] flex flex-col items-center justify-center text-zinc-400">
         <div className="h-8 w-8 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin mb-3" />
@@ -42,7 +42,7 @@ const MainDashboard: React.FC = () => {
     );
   }
 
-  if (!currentUser) {
+  if (!currentUser || !firebaseUser) {
     return <AuthView />;
   }
 

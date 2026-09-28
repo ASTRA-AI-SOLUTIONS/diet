@@ -49,8 +49,8 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
 
   // Selected food for portion configuration
   const [selectedFood, setSelectedFood] = useState<FoodItem | null>(null);
-  const [multiplier, setMultiplier] = useState<number>(1);
-  const [customGrams, setCustomGrams] = useState<number>(100);
+  const [multiplier, setMultiplier] = useState<string | number>(1);
+  const [customGrams, setCustomGrams] = useState<string | number>(100);
 
   // Custom entry form
   const [customName, setCustomName] = useState('');
@@ -104,24 +104,13 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
     setCustomGrams(refGrams);
   };
 
-  const handleGramsChange = (newGrams: number) => {
-    const clampedGrams = Math.max(1, newGrams);
-    setCustomGrams(clampedGrams);
+  const handleMultiplierIncrement = (delta: number) => {
+    const current = typeof multiplier === 'number' ? multiplier : parseFloat(String(multiplier)) || 1;
+    const next = Math.max(0.1, Math.round((current + delta) * 100) / 100);
+    setMultiplier(next);
     if (selectedFood) {
       const refGrams = getFoodReferenceGrams(selectedFood);
-      if (refGrams > 0) {
-        const newMultiplier = Math.round((clampedGrams / refGrams) * 100) / 100;
-        setMultiplier(Math.max(0.01, newMultiplier));
-      }
-    }
-  };
-
-  const handleMultiplierChange = (val: number) => {
-    const clamped = Math.max(0.1, Math.round(val * 10) / 10);
-    setMultiplier(clamped);
-    if (selectedFood) {
-      const refGrams = getFoodReferenceGrams(selectedFood);
-      setCustomGrams(Math.round(refGrams * clamped));
+      setCustomGrams(Math.round(refGrams * next));
     }
   };
 
@@ -129,15 +118,16 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
   const preview = useMemo(() => {
     if (!selectedFood) return null;
     const refGrams = getFoodReferenceGrams(selectedFood);
-    // Factor is directly user entered grams divided by catalogue reference grams
-    const factor = refGrams > 0 ? customGrams / refGrams : 1;
+    const parsedGrams = typeof customGrams === 'number' ? customGrams : parseFloat(String(customGrams));
+    const activeGrams = !isNaN(parsedGrams) && parsedGrams > 0 ? parsedGrams : refGrams;
 
+    const factor = refGrams > 0 ? activeGrams / refGrams : 1;
     const cal = Math.round(selectedFood.calories * factor);
     const p = Math.round(selectedFood.protein * factor * 10) / 10;
     const c = Math.round(selectedFood.carbs * factor * 10) / 10;
     const f = Math.round(selectedFood.fats * factor * 10) / 10;
     const fib = Math.round(selectedFood.fiber * factor * 10) / 10;
-    const totalGrams = customGrams;
+    const totalGrams = Math.round(activeGrams);
     const multiplierDisplay = Math.round(factor * 100) / 100;
 
     // Projected totals
@@ -363,21 +353,33 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="flex items-center gap-2"
+                  className="flex items-center gap-1.5 flex-wrap"
                 >
                   <input
-                    type="time"
+                    type="text"
+                    placeholder="e.g. 13:30 or 1:30 PM"
                     value={mealTimeInput}
                     onChange={(e) => setMealTimeInput(e.target.value)}
-                    className="rounded-lg border border-white/[0.1] bg-zinc-950 px-2.5 py-1 text-xs font-mono font-bold text-white focus:outline-none cursor-pointer"
+                    className="w-36 rounded-lg border border-white/[0.1] bg-zinc-950 px-2.5 py-1 text-xs font-mono font-bold text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-400"
                   />
                   <button
                     type="button"
                     onClick={handleSetNow}
-                    className="rounded-lg border border-white/[0.06] bg-zinc-800 px-2 py-1 text-[11px] text-zinc-300 hover:text-white hover:bg-zinc-700 cursor-pointer"
+                    className="rounded-lg border border-white/[0.06] bg-zinc-800 px-2 py-1 text-[11px] text-zinc-300 hover:text-white hover:bg-zinc-700 cursor-pointer active:scale-95"
+                    title="Set to Current Time"
                   >
                     Current
                   </button>
+                  {mealTimeInput && (
+                    <button
+                      type="button"
+                      onClick={() => setMealTimeInput('')}
+                      className="rounded-lg border border-white/[0.06] bg-zinc-800/80 px-2 py-1 text-[11px] text-zinc-400 hover:text-rose-400 hover:bg-zinc-700 cursor-pointer active:scale-95"
+                      title="Clear Time"
+                    >
+                      Clear
+                    </button>
+                  )}
                 </motion.div>
               )}
             </div>
@@ -489,24 +491,40 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
-                            onClick={() => handleMultiplierChange(multiplier - 0.25)}
-                            className="h-8 w-8 rounded-lg bg-zinc-800 text-white font-bold hover:bg-zinc-700 cursor-pointer"
+                            onClick={() => handleMultiplierIncrement(-0.25)}
+                            className="h-8 w-8 rounded-lg bg-zinc-800 text-white font-bold hover:bg-zinc-700 cursor-pointer active:scale-95"
                           >
                             -
                           </button>
                           <input
                             type="number"
-                            step="0.1"
-                            min="0.05"
-                            max="20"
-                            value={preview.multiplierDisplay}
-                            onChange={(e) => handleMultiplierChange(parseFloat(e.target.value) || 1)}
-                            className="w-20 text-center font-mono font-bold text-xs bg-zinc-900 border border-white/[0.08] rounded-lg py-1.5 text-white"
+                            step="any"
+                            value={multiplier}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setMultiplier(val);
+                              if (val !== '' && selectedFood) {
+                                const m = parseFloat(val);
+                                if (!isNaN(m) && m > 0) {
+                                  const refGrams = getFoodReferenceGrams(selectedFood);
+                                  setCustomGrams(Math.round(refGrams * m));
+                                }
+                              }
+                            }}
+                            onBlur={() => {
+                              if (multiplier === '' || Number(multiplier) <= 0) {
+                                setMultiplier(1);
+                                if (selectedFood) {
+                                  setCustomGrams(getFoodReferenceGrams(selectedFood));
+                                }
+                              }
+                            }}
+                            className="w-20 text-center font-mono font-bold text-xs bg-zinc-900 border border-white/[0.08] rounded-lg py-1.5 text-white focus:outline-none focus:border-zinc-400"
                           />
                           <button
                             type="button"
-                            onClick={() => handleMultiplierChange(multiplier + 0.25)}
-                            className="h-8 w-8 rounded-lg bg-zinc-800 text-white font-bold hover:bg-zinc-700 cursor-pointer"
+                            onClick={() => handleMultiplierIncrement(0.25)}
+                            className="h-8 w-8 rounded-lg bg-zinc-800 text-white font-bold hover:bg-zinc-700 cursor-pointer active:scale-95"
                           >
                             +
                           </button>
@@ -525,10 +543,31 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
                         <div className="flex items-center gap-2">
                           <input
                             type="number"
-                            step="5"
-                            min="1"
+                            step="any"
                             value={customGrams}
-                            onChange={(e) => handleGramsChange(parseInt(e.target.value) || 0)}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setCustomGrams(val);
+                              if (val !== '' && selectedFood) {
+                                const g = parseFloat(val);
+                                if (!isNaN(g) && g > 0) {
+                                  const refGrams = getFoodReferenceGrams(selectedFood);
+                                  if (refGrams > 0) {
+                                    setMultiplier(Math.round((g / refGrams) * 100) / 100);
+                                  }
+                                }
+                              }
+                            }}
+                            onBlur={() => {
+                              if (customGrams === '' || Number(customGrams) <= 0) {
+                                if (selectedFood) {
+                                  setCustomGrams(getFoodReferenceGrams(selectedFood));
+                                  setMultiplier(1);
+                                } else {
+                                  setCustomGrams(100);
+                                }
+                              }
+                            }}
                             className="w-24 text-center font-mono font-bold text-xs bg-zinc-900 border border-white/[0.08] rounded-lg py-1.5 text-white focus:border-emerald-500 focus:outline-none"
                           />
                           <span className="text-xs text-zinc-400">g</span>

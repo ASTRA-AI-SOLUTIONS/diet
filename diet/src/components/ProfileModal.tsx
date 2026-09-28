@@ -28,10 +28,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
 
   const [name, setName] = useState('');
   const [gender, setGender] = useState<Gender>('male');
-  const [age, setAge] = useState(28);
-  const [heightCm, setHeightCm] = useState(180);
-  const [weightKg, setWeightKg] = useState(78);
-  const [targetWeightKg, setTargetWeightKg] = useState(75);
+  const [age, setAge] = useState<string | number>(28);
+  const [heightCm, setHeightCm] = useState<string | number>(180);
+  const [weightKg, setWeightKg] = useState<string | number>(78);
+  const [targetWeightKg, setTargetWeightKg] = useState<string | number>(75);
   const [activityLevel, setActivityLevel] = useState<ActivityLevel>('moderate');
   const [goal, setGoal] = useState<DietGoal>('maintenance');
 
@@ -42,7 +42,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
 
   // Manual targets override toggle
   const [useCustomCalories, setUseCustomCalories] = useState(false);
-  const [customCaloriesInput, setCustomCaloriesInput] = useState(2000);
+  const [customCaloriesInput, setCustomCaloriesInput] = useState<string | number>(2000);
 
   // Initialize from currentUser
   useEffect(() => {
@@ -62,11 +62,18 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
     }
   }, [currentUser, isOpen]);
 
+  // Numerical conversions for math
+  const numAge = typeof age === 'number' ? age : Number(age) || 28;
+  const numHeight = typeof heightCm === 'number' ? heightCm : Number(heightCm) || 180;
+  const numWeight = typeof weightKg === 'number' ? weightKg : Number(weightKg) || 78;
+  const numTargetWeight = typeof targetWeightKg === 'number' ? targetWeightKg : Number(targetWeightKg) || 75;
+  const numCustomCalories = typeof customCaloriesInput === 'number' ? customCaloriesInput : Number(customCaloriesInput) || 2000;
+
   // Real-time calculations
-  const bmr = calculateBMR(gender, weightKg, heightCm, age);
-  const tdee = calculateTDEE(gender, weightKg, heightCm, age, activityLevel);
+  const bmr = calculateBMR(gender, numWeight, numHeight, numAge);
+  const tdee = calculateTDEE(gender, numWeight, numHeight, numAge, activityLevel);
   const calculatedCalories = useCustomCalories
-    ? customCaloriesInput
+    ? numCustomCalories
     : calculateTargetCalories(tdee, goal);
 
   const calculatedTargets = calculateMacrosFromPercentages(
@@ -74,7 +81,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
     proteinPct,
     carbsPct,
     fatsPct,
-    weightKg
+    numWeight
   );
 
   const handleGoalChange = (newGoal: DietGoal) => {
@@ -92,10 +99,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
     updateCurrentUser({
       name: name.trim() || currentUser.name,
       gender,
-      age: Number(age),
-      heightCm: Number(heightCm),
-      weightKg: Number(weightKg),
-      targetWeightKg: Number(targetWeightKg),
+      age: numAge,
+      heightCm: numHeight,
+      weightKg: numWeight,
+      targetWeightKg: numTargetWeight,
       activityLevel,
       goal,
       macroSplit: {
@@ -191,11 +198,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                 <label className="block text-[10px] text-zinc-400 mb-1">Age (yrs)</label>
                 <input
                   type="number"
-                  min="14"
-                  max="100"
+                  step="any"
                   value={age}
-                  onChange={(e) => setAge(parseInt(e.target.value) || 25)}
-                  className="w-full rounded-lg border border-white/[0.08] bg-zinc-900 px-2 py-1 text-xs font-mono text-white text-center"
+                  onChange={(e) => setAge(e.target.value)}
+                  onBlur={() => {
+                    if (age === '' || Number(age) <= 0) setAge(28);
+                  }}
+                  className="w-full rounded-lg border border-white/[0.08] bg-zinc-900 px-2 py-1 text-xs font-mono text-white text-center focus:border-zinc-400 focus:outline-none"
                 />
               </div>
 
@@ -203,11 +212,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                 <label className="block text-[10px] text-zinc-400 mb-1">Height (cm)</label>
                 <input
                   type="number"
-                  min="100"
-                  max="250"
+                  step="any"
                   value={heightCm}
-                  onChange={(e) => setHeightCm(parseInt(e.target.value) || 175)}
-                  className="w-full rounded-lg border border-white/[0.08] bg-zinc-900 px-2 py-1 text-xs font-mono text-white text-center"
+                  onChange={(e) => setHeightCm(e.target.value)}
+                  onBlur={() => {
+                    if (heightCm === '' || Number(heightCm) <= 0) setHeightCm(180);
+                  }}
+                  className="w-full rounded-lg border border-white/[0.08] bg-zinc-900 px-2 py-1 text-xs font-mono text-white text-center focus:border-zinc-400 focus:outline-none"
                 />
               </div>
 
@@ -215,12 +226,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                 <label className="block text-[10px] text-zinc-400 mb-1">Weight (kg)</label>
                 <input
                   type="number"
-                  min="30"
-                  max="250"
-                  step="0.5"
+                  step="any"
                   value={weightKg}
-                  onChange={(e) => setWeightKg(parseFloat(e.target.value) || 70)}
-                  className="w-full rounded-lg border border-white/[0.08] bg-zinc-900 px-2 py-1 text-xs font-mono text-white text-center"
+                  onChange={(e) => setWeightKg(e.target.value)}
+                  onBlur={() => {
+                    if (weightKg === '' || Number(weightKg) <= 0) setWeightKg(78);
+                  }}
+                  className="w-full rounded-lg border border-white/[0.08] bg-zinc-900 px-2 py-1 text-xs font-mono text-white text-center focus:border-zinc-400 focus:outline-none"
                 />
               </div>
 
@@ -228,12 +240,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                 <label className="block text-[10px] text-zinc-400 mb-1">Target Wt (kg)</label>
                 <input
                   type="number"
-                  min="30"
-                  max="250"
-                  step="0.5"
+                  step="any"
                   value={targetWeightKg}
-                  onChange={(e) => setTargetWeightKg(parseFloat(e.target.value) || 70)}
-                  className="w-full rounded-lg border border-white/[0.08] bg-zinc-900 px-2 py-1 text-xs font-mono text-white text-center"
+                  onChange={(e) => setTargetWeightKg(e.target.value)}
+                  onBlur={() => {
+                    if (targetWeightKg === '' || Number(targetWeightKg) <= 0) setTargetWeightKg(75);
+                  }}
+                  className="w-full rounded-lg border border-white/[0.08] bg-zinc-900 px-2 py-1 text-xs font-mono text-white text-center focus:border-zinc-400 focus:outline-none"
                 />
               </div>
             </div>

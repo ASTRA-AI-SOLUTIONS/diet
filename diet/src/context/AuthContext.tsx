@@ -153,19 +153,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const register = async (
     data: Omit<UserProfile, 'id' | 'createdAt'>
   ): Promise<UserProfile> => {
-    const userId = firebaseUser?.uid || pendingGoogleUser?.uid || `user_${Date.now()}`;
+    const userId = firebaseUser?.uid || pendingGoogleUser?.uid || auth.currentUser?.uid;
+    if (!userId) {
+      throw new Error('Please sign in with Google to create your athlete protocol.');
+    }
     const newUser: UserProfile = {
       ...data,
       id: userId,
       createdAt: new Date().toISOString(),
     };
 
-    // Save to Firestore if connected
+    // Save to Firestore
     try {
       const userDocRef = doc(db, 'users', userId);
       await setDoc(userDocRef, newUser);
     } catch (err) {
-      console.warn('Saving profile to firestore offline or unauthorized:', err);
+      console.warn('Saving profile to firestore error:', err);
     }
 
     setCurrentUser(newUser);
