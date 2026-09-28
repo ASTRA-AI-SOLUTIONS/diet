@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useDiet } from '../context/DietContext';
 import { FoodItem, MealType } from '../types/diet';
@@ -20,6 +20,8 @@ import {
   Activity,
   ShieldCheck,
   AlertTriangle,
+  Globe,
+  Loader2,
 } from 'lucide-react';
 
 interface MealLoggerModalProps {
@@ -74,6 +76,9 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
     }
   }, [isOpen, initialMealType]);
 
+  const [onlineResults, setOnlineResults] = useState<FoodItem[]>([]);
+  const [isSearchingOnline, setIsSearchingOnline] = useState(false);
+
   const categories = ['All', 'Indian Cuisine', 'Protein', 'Carbs', 'Fats', 'Produce', 'Dairy', 'Snacks'];
 
   const filteredFoods = useMemo(() => {
@@ -96,6 +101,55 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
       return matchesSearch && matchesCat;
     });
   }, [searchQuery, selectedCategory]);
+
+  useEffect(() => {
+    if (searchQuery.trim().length > 2 && filteredFoods.length === 0) {
+      const delayDebounceFn = setTimeout(() => {
+        searchOnlineFood(searchQuery.trim());
+      }, 600);
+      return () => clearTimeout(delayDebounceFn);
+    } else {
+      setOnlineResults([]);
+    }
+  }, [searchQuery, filteredFoods.length]);
+
+  const searchOnlineFood = async (query: string) => {
+    setIsSearchingOnline(true);
+    try {
+      const res = await fetch(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=20`, {
+        headers: { 'User-Agent': 'AstraDiet-MacroTracker/1.0' }
+      });
+      const data = await res.json();
+      if (data.products) {
+        const results: FoodItem[] = data.products
+          .filter((p: any) => p.product_name && p.nutriments && p.nutriments['energy-kcal_100g'] !== undefined)
+          .map((p: any) => {
+            const serving = Number(p.serving_quantity) || 100;
+            const unit = p.serving_quantity_unit || 'g';
+            const multiplier = serving / 100;
+            return {
+              id: `online_${p._id || p.code || Math.random().toString()}`,
+              name: p.product_name + (p.brands ? ` (${p.brands.split(',')[0]})` : ''),
+              category: 'Snacks',
+              cuisine: 'Global',
+              servingSize: serving,
+              servingUnit: unit,
+              calories: Math.round((p.nutriments['energy-kcal_100g'] || 0) * multiplier),
+              protein: Number(((p.nutriments.proteins_100g || 0) * multiplier).toFixed(1)),
+              carbs: Number(((p.nutriments.carbohydrates_100g || 0) * multiplier).toFixed(1)),
+              fats: Number(((p.nutriments.fat_100g || 0) * multiplier).toFixed(1)),
+              fiber: Number(((p.nutriments.fiber_100g || 0) * multiplier).toFixed(1)),
+              defaultGrams: typeof serving === 'number' && unit === 'g' ? serving : 100,
+            };
+          });
+        setOnlineResults(results);
+      }
+    } catch (err) {
+      console.error("Failed to search online foods:", err);
+    } finally {
+      setIsSearchingOnline(false);
+    }
+  };
 
   const handleSelectFood = (food: FoodItem) => {
     const refGrams = getFoodReferenceGrams(food);
@@ -714,12 +768,18 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
 
                 {/* Food List */}
                 <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
-                  {filteredFoods.length === 0 ? (
+                  {filteredFoods.length === 0 && !isSearchingOnline && onlineResults.length === 0 && (
                     <div className="py-8 text-center text-zinc-500 text-xs">
                       No foods matching &ldquo;{searchQuery}&rdquo;. Try another term or create a custom entry.
                     </div>
-                  ) : (
-                    filteredFoods.map((food) => (
+                  )}
+                  {isSearchingOnline && (
+                    <div className="flex flex-col items-center justify-center py-8 text-zinc-400 gap-3">
+                      <Loader2 className="w-5 h-5 animate-spin text-indigo-500" />
+                      <span className="text-xs font-medium">Searching global database for "{searchQuery}"...</span>
+                    </div>
+                  )}
+                  {(filteredFoods.length > 0 ? filteredFoods : onlineResults).map((food) => (
                       <div
                         key={food.id}
                         onClick={() => handleSelectFood(food)}
@@ -735,6 +795,11 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
                             {food.cuisine === 'Indian' && (
                               <span className="text-[10px] px-1.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-300 font-medium">
                                 Indian
+                              </span>
+                            )}
+                            {food.id.startsWith('online_') && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 font-medium whitespace-nowrap flex items-center gap-1">
+                                <Globe className="w-2.5 h-2.5" /> Global DB
                               </span>
                             )}
                           </div>
@@ -759,7 +824,7 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
                         </div>
                       </div>
                     ))
-                  )}
+                  }
                 </div>
               </>
             )}
