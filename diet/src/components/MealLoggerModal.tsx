@@ -103,7 +103,7 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
   }, [searchQuery, selectedCategory]);
 
   useEffect(() => {
-    if (searchQuery.trim().length > 2 && filteredFoods.length === 0) {
+    if (searchQuery.trim().length > 2) {
       const delayDebounceFn = setTimeout(() => {
         searchOnlineFood(searchQuery.trim());
       }, 600);
@@ -111,7 +111,7 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
     } else {
       setOnlineResults([]);
     }
-  }, [searchQuery, filteredFoods.length]);
+  }, [searchQuery]);
 
   const searchOnlineFood = async (query: string) => {
     setIsSearchingOnline(true);
@@ -779,7 +779,7 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
                       <span className="text-xs font-medium">Searching global database for "{searchQuery}"...</span>
                     </div>
                   )}
-                  {(filteredFoods.length > 0 ? filteredFoods : onlineResults).map((food) => (
+                  {[...filteredFoods, ...onlineResults].map((food) => (
                       <div
                         key={food.id}
                         onClick={() => handleSelectFood(food)}
