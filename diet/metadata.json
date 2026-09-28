@@ -1,0 +1,6 @@
+{
+  "name": "AstraDiet 3D Macro Tracker",
+  "description": "High-fluidity 3D diet and macro nutrient tracking platform with multi-user authentication, real-time BMR/TDEE profiling, portion-aware food database, and target vs excess monitoring.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
