@@ -121,11 +121,31 @@ export const DietProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubMeals = onSnapshot(
       mealsColl,
       (snapshot) => {
-        const cloudMeals = snapshot.docs.map((d) => ({
-          ...d.data(),
-          id: d.id,
-        })) as MealEntry[];
-        setMeals(cloudMeals);
+        if (!snapshot.empty) {
+          const cloudMeals = snapshot.docs.map((d) => ({
+            ...d.data(),
+            id: d.id,
+            userId: currentUser.id,
+          })) as MealEntry[];
+          setMeals(cloudMeals);
+        } else {
+          // If Firestore is empty for this user, backfill any local meals to the cloud
+          setMeals((currentLocalMeals) => {
+            if (currentLocalMeals.length > 0) {
+              currentLocalMeals.forEach(async (meal) => {
+                try {
+                  const syncedMeal: MealEntry = { ...meal, userId: currentUser.id };
+                  const mealRef = doc(db, 'users', currentUser.id, 'meals', meal.id);
+                  await setDoc(mealRef, syncedMeal, { merge: true });
+                } catch (e) {
+                  console.warn('Failed to sync meal to cloud:', e);
+                }
+              });
+              return currentLocalMeals.map((m) => ({ ...m, userId: currentUser.id }));
+            }
+            return [];
+          });
+        }
       },
       (error) => {
         console.warn('Error reading meals from firestore:', error);
@@ -137,10 +157,26 @@ export const DietProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubLogs = onSnapshot(
       logsColl,
       (snapshot) => {
-        const cloudLogs = snapshot.docs.map((d) => ({
-          ...d.data(),
-        })) as DailyLog[];
-        setDailyLogs(cloudLogs);
+        if (!snapshot.empty) {
+          const cloudLogs = snapshot.docs.map((d) => ({
+            ...d.data(),
+          })) as DailyLog[];
+          setDailyLogs(cloudLogs);
+        } else {
+          setDailyLogs((currentLocalLogs) => {
+            if (currentLocalLogs.length > 0) {
+              currentLocalLogs.forEach(async (log) => {
+                try {
+                  const logRef = doc(db, 'users', currentUser.id, 'dailyLogs', log.date);
+                  await setDoc(logRef, log, { merge: true });
+                } catch (e) {
+                  console.warn('Failed to sync daily log to cloud:', e);
+                }
+              });
+            }
+            return currentLocalLogs;
+          });
+        }
       },
       (error) => {
         console.warn('Error reading daily logs from firestore:', error);

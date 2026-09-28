@@ -20,14 +20,8 @@ import { handleFirestoreError, OperationType } from '../utils/firestoreErrors';
 
 export function emailToUserId(email: string): string {
   const clean = email.trim().toLowerCase();
-  let hash = 0;
-  for (let i = 0; i < clean.length; i++) {
-    hash = ((hash << 5) - hash) + clean.charCodeAt(i);
-    hash |= 0;
-  }
-  const prefix = clean.replace(/[^a-z0-9]/g, '_').slice(0, 24);
-  const positiveHash = Math.abs(hash).toString(36);
-  return `ath_${prefix}_${positiveHash}`;
+  const safe = clean.replace(/[^a-z0-9]/g, '_');
+  return `ath_${safe}`;
 }
 
 interface AuthContextType {
@@ -69,7 +63,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(false);
   const [pendingGoogleUser, setPendingGoogleUser] = useState<{
     name: string;
     email: string;
@@ -93,30 +87,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     let unsubscribeFirestore: (() => void) | null = null;
 
-    // Check for redirect result when returning from Google redirect auth
-    getRedirectResult(auth)
-      .then(async (result) => {
-        if (result && result.user) {
-          const fbUser = result.user;
-          const userDocRef = doc(db, 'users', fbUser.uid);
-          const snap = await getDoc(userDocRef);
-          if (snap.exists()) {
-            const data = snap.data() as UserProfile;
-            setCurrentUser({ ...data, id: fbUser.uid });
-            setPendingGoogleUser(null);
-          } else {
-            setPendingGoogleUser({
-              name: fbUser.displayName || 'Athlete',
-              email: fbUser.email || '',
-              uid: fbUser.uid,
-            });
-          }
-        }
-      })
-      .catch((err) => {
-        console.warn('Redirect auth result error:', err);
-      });
-
     const unsubscribeAuth = onAuthStateChanged(auth, async (fbUser) => {
       setFirebaseUser(fbUser);
 
@@ -131,13 +101,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               const data = docSnap.data() as UserProfile;
               setCurrentUser({ ...data, id: fbUser.uid });
               setPendingGoogleUser(null);
-            } else {
-              // Authenticated with Google but no profile doc created yet
-              setPendingGoogleUser({
-                name: fbUser.displayName || 'Athlete',
-                email: fbUser.email || '',
-                uid: fbUser.uid,
-              });
             }
             setAuthLoading(false);
           },
@@ -233,7 +196,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const userId = emailToUserId(cleanEmail);
     try {
       const userDocRef = doc(db, 'users', userId);
-      const snap = await getDoc(userDocRef);
+      // Timeout after 6 seconds so mobile users never hang
+      const snap = await Promise.race([
+        getDoc(userDocRef),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('timeout')), 6000)
+        ),
+      ]);
       if (snap.exists()) {
         const data = snap.data() as UserProfile;
         // If profile has a passcode, verify it
@@ -245,9 +214,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         return { success: false, requiresRegister: true };
       }
-    } catch (err) {
+    } catch (err: unknown) {
       console.warn('Error during cloud login:', err);
-      return { success: false, error: 'Unable to connect to cloud database.' };
+      // Check if active profile matches this email in local storage
+      if (currentUser && currentUser.email.toLowerCase() === cleanEmail) {
+        return { success: true };
+      }
+      return { success: false, error: 'Unable to connect to cloud database. Please try again.' };
     }
   };
 

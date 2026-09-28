@@ -20,4 +20,10 @@ export async function testConnection() {
     }
   }
 }
-testConnection();
+// Run non-blocking connection check in background after initial render
+if (typeof window !== 'undefined') {
+  setTimeout(() => {
+    testConnection().catch(() => {});
+  }, 1000);
+}
+

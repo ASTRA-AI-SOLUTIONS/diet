@@ -41,8 +41,8 @@ export const AuthView: React.FC<AuthViewProps> = ({ onSuccess }) => {
   const [syncError, setSyncError] = useState('');
 
   // Email & Passcode cloud sync login state
-  const [athleteName, setAthleteName] = useState('Athlete');
-  const [athleteEmail, setAthleteEmail] = useState('sarovarlakes@gmail.com');
+  const [athleteName, setAthleteName] = useState('');
+  const [athleteEmail, setAthleteEmail] = useState('');
   const [athletePasscode, setAthletePasscode] = useState('');
   const [isEmailLoggingIn, setIsEmailLoggingIn] = useState(false);
   const [emailLoginError, setEmailLoginError] = useState('');
@@ -183,7 +183,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onSuccess }) => {
                     Athlete Cloud Account
                   </h2>
                   <p className="text-xs text-zinc-400">
-                    Works automatically across your phone, laptop, and tablet on Vercel without OAuth domain restrictions.
+                    Sign in to sync your nutrition protocol, meals, and hydration across all your devices.
                   </p>
                 </div>
 
