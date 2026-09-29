@@ -32,14 +32,15 @@ export const FoodLibraryView: React.FC<FoodLibraryViewProps> = ({ onAddFood }) =
   });
   const filteredLocal = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    const combinedDB = [...FOOD_DATABASE, ...cachedAiFoods];
-    return combinedDB.filter((f) => {
+    const combinedDB = [...cachedAiFoods, ...FOOD_DATABASE];
+    
+    const filtered = combinedDB.filter((f) => {
       const matchSearch =
         !q ||
         f.name.toLowerCase().includes(q) ||
         (f.hindiName && f.hindiName.toLowerCase().includes(q)) ||
-        (f.category && f.category.toLowerCase().includes(q)) ||
-        (f.cuisine && f.cuisine.toLowerCase().includes(q));
+        (f.cuisine && f.cuisine.toLowerCase().includes(q)) ||
+        (f.category && f.category.toLowerCase().includes(q));
 
       const matchCat =
         selectedCategory === 'All'
@@ -50,13 +51,56 @@ export const FoodLibraryView: React.FC<FoodLibraryViewProps> = ({ onAddFood }) =
 
       return matchSearch && matchCat;
     });
+
+    if (q) {
+      filtered.sort((a, b) => {
+        const aName = a.name.toLowerCase();
+        const bName = b.name.toLowerCase();
+        
+        // Exact match highest priority
+        if (aName === q && bName !== q) return -1;
+        if (bName === q && aName !== q) return 1;
+
+        // Starts with
+        const aStarts = aName.startsWith(q) ? 1 : 0;
+        const bStarts = bName.startsWith(q) ? 1 : 0;
+        if (aStarts !== bStarts) return bStarts - aStarts;
+
+        // Length
+        return aName.length - bName.length;
+      });
+    }
+
+    return filtered;
   }, [searchQuery, selectedCategory]);
 
-  const displayedFoods = searchMode === 'online' ? onlineResults : filteredLocal;
+  const displayedFoods = (() => {
+      const all = searchMode === 'online' ? [...onlineResults, ...filteredLocal] : filteredLocal;
+      const q = searchQuery.toLowerCase().trim();
+      if (!q) return all;
+
+      return [...all].sort((a, b) => {
+        const aName = a.name.toLowerCase();
+        const bName = b.name.toLowerCase();
+        
+        if (aName === q && bName !== q) return -1;
+        if (bName === q && aName !== q) return 1;
+
+        const aStarts = aName.startsWith(q) ? 1 : 0;
+        const bStarts = bName.startsWith(q) ? 1 : 0;
+        if (aStarts !== bStarts) return bStarts - aStarts;
+
+        return aName.length - bName.length;
+      });
+    })();
 
   useEffect(() => {
     setOnlineResults([]);
-  }, [searchQuery]);
+    if (searchMode === 'online' && searchQuery.trim().length > 2) {
+      const timeoutId = setTimeout(() => searchOnlineFood(), 600);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [searchQuery, searchMode]);
 
   const searchOnlineFood = async (manualQuery?: string) => {
     const query = (manualQuery || searchQuery).trim();

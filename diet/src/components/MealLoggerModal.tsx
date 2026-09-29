@@ -78,6 +78,7 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
 
   const [onlineResults, setOnlineResults] = useState<FoodItem[]>([]);
   const [isSearchingOnline, setIsSearchingOnline] = useState(false);
+  const [searchMode, setSearchMode] = useState<'local' | 'online'>('local');
 
   const categories = ['All', 'Indian Cuisine', 'Protein', 'Carbs', 'Fats', 'Produce', 'Dairy', 'Snacks'];
 
@@ -93,81 +94,126 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
   });
   const filteredFoods = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    const combinedDB = [...FOOD_DATABASE, ...cachedAiFoods];
-    return combinedDB.filter((food) => {
-      const matchesSearch =
+    const combinedDB = [...cachedAiFoods, ...FOOD_DATABASE];
+    
+    const filtered = combinedDB.filter((f) => {
+      const matchSearch =
         !q ||
-        food.name.toLowerCase().includes(q) ||
-        (food.hindiName && food.hindiName.toLowerCase().includes(q)) ||
-        (food.cuisine && food.cuisine.toLowerCase().includes(q)) ||
-        (food.category && food.category.toLowerCase().includes(q));
+        f.name.toLowerCase().includes(q) ||
+        (f.hindiName && f.hindiName.toLowerCase().includes(q)) ||
+        (f.cuisine && f.cuisine.toLowerCase().includes(q)) ||
+        (f.category && f.category.toLowerCase().includes(q));
 
-      const matchesCat =
+      const matchCat =
         selectedCategory === 'All'
           ? true
           : selectedCategory === 'Indian Cuisine'
-          ? food.category === 'Indian Cuisine' || food.cuisine === 'Indian'
-          : food.category === selectedCategory;
+          ? f.category === 'Indian Cuisine' || f.cuisine === 'Indian'
+          : f.category === selectedCategory;
 
-      return matchesSearch && matchesCat;
+      return matchSearch && matchCat;
     });
+
+    if (q) {
+      filtered.sort((a, b) => {
+        const aName = a.name.toLowerCase();
+        const bName = b.name.toLowerCase();
+        
+        // Exact match highest priority
+        if (aName === q && bName !== q) return -1;
+        if (bName === q && aName !== q) return 1;
+
+        // Starts with
+        const aStarts = aName.startsWith(q) ? 1 : 0;
+        const bStarts = bName.startsWith(q) ? 1 : 0;
+        if (aStarts !== bStarts) return bStarts - aStarts;
+
+        // Length
+        return aName.length - bName.length;
+      });
+    }
+
+    return filtered;
   }, [searchQuery, selectedCategory]);
 
   useEffect(() => {
     setOnlineResults([]);
-  }, [searchQuery]);
+    if (searchMode === 'online' && searchQuery.trim().length > 2) {
+      const timeoutId = setTimeout(() => searchOnlineFood(), 600);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [searchQuery, searchMode]);
 
-  const searchOnlineFood = async () => {
-    const query = searchQuery.trim();
+  const searchOnlineFood = async (manualQuery?: string) => {
+    const query = (manualQuery || searchQuery).trim();
     if (query.length < 2) return;
     setIsSearchingOnline(true);
-    setOnlineResults([]); // clear previous
+    setOnlineResults([]);
 
     try {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-      if (!apiKey) {
-        alert("Please add VITE_GEMINI_API_KEY to your environment variables to use AI search.");
-        return;
+      // Fetch both Indian-prioritized results and Global results simultaneously
+      const [indiaRes, globalRes] = await Promise.all([
+        fetch(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&countries_tags_en=india&search_simple=1&action=process&json=1&page_size=15`, {
+          headers: { 'User-Agent': 'AstraDiet-MacroTracker/1.0' }
+        }).catch(() => null),
+        fetch(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=20`, {
+          headers: { 'User-Agent': 'AstraDiet-MacroTracker/1.0' }
+        }).catch(() => null)
+      ]);
+
+      const indiaData = indiaRes ? await indiaRes.json().catch(() => ({})) : {};
+      const globalData = globalRes ? await globalRes.json().catch(() => ({})) : {};
+
+      let combinedProducts: any[] = [];
+      const seenIds = new Set();
+
+      if (indiaData.products) {
+        indiaData.products.forEach((p: any) => {
+          if (p.product_name && !seenIds.has(p._id || p.code)) {
+            seenIds.add(p._id || p.code);
+            combinedProducts.push(p);
+          }
+        });
       }
 
-      const prompt = `You are a nutrition database. Return a JSON array of up to 6 best matching food items for the query: "${query}". Each item MUST have: id (unique string), name (descriptive name), category (string), cuisine (string), servingSize (number), servingUnit (string like 'g', 'ml', 'piece'), calories (number), protein (number), carbs (number), fats (number), fiber (number), defaultGrams (number). Return ONLY a raw valid JSON array, NO markdown formatting, NO backticks.`;
-
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }]
-        })
-      });
-
-      const data = await res.json();
-      
-      if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
-        let jsonText = data.candidates[0].content.parts[0].text;
-        jsonText = jsonText.replace(/```json/gi, '').replace(/```/g, '').trim();
-        
-        try {
-          const parsed = JSON.parse(jsonText);
-          if (Array.isArray(parsed)) {
-            const results = parsed.map(item => ({
-              ...item,
-              id: 'online_' + (item.id || Math.random().toString()),
-              category: 'AI AI DB',
-              cuisine: 'Global'
-            }));
-            setOnlineResults(results);
+      if (globalData.products) {
+        globalData.products.forEach((p: any) => {
+          if (p.product_name && !seenIds.has(p._id || p.code)) {
+            seenIds.add(p._id || p.code);
+            combinedProducts.push(p);
           }
-        } catch (parseErr) {
-          console.error("Failed to parse Gemini JSON:", parseErr, jsonText);
-        }
+        });
+      }
+
+      if (combinedProducts.length > 0) {
+        const results = combinedProducts.map((p: any) => {
+          const kcal =
+            p.nutriments?.['energy-kcal_100g'] ||
+            (p.nutriments?.energy_100g ? Math.round(p.nutriments.energy_100g / 4.184) : 0);
+          
+          return {
+            id: 'online_' + (p._id || p.code || Math.random().toString(36).substring(7)),
+            name: (p.product_name || 'Unknown Food') + (p.brands ? ` (${p.brands})` : ''),
+            category: 'Global DB',
+            cuisine: 'Global',
+            servingSize: 100,
+            servingUnit: 'g',
+            calories: kcal,
+            protein: p.nutriments?.proteins_100g || 0,
+            carbs: p.nutriments?.carbohydrates_100g || 0,
+            fats: p.nutriments?.fat_100g || 0,
+            fiber: p.nutriments?.fiber_100g || 0,
+          };
+        }).filter((f) => f.calories > 0);
+
+        setOnlineResults(results);
       }
     } catch (err) {
-      console.error("Failed to search with Gemini AI:", err);
+      console.error("Failed to search online:", err);
     } finally {
       setIsSearchingOnline(false);
     }
   };
-
   const handleSelectFood = (food: FoodItem) => {
     if (food.id.startsWith('online_')) {
       // Save to cache
@@ -299,6 +345,9 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
 
     setSelectedFood(null);
     onClose();
+    setSearchQuery('');
+    setOnlineResults([]);
+    setSearchMode('local');
   };
 
   const handleAddPreset = (preset: MealPreset) => {
@@ -317,6 +366,9 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
       mealTime: specifyTime ? mealTimeInput : undefined,
     });
     onClose();
+    setSearchQuery('');
+    setOnlineResults([]);
+    setSearchMode('local');
   };
 
   const handleAddCustomMeal = (e: React.FormEvent) => {
@@ -352,6 +404,9 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
     setCustomFats('');
     setCustomFiber('');
     onClose();
+    setSearchQuery('');
+    setOnlineResults([]);
+    setSearchMode('local');
   };
 
   const handleSetNow = () => {
@@ -509,11 +564,35 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
                     <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
                     <input
                       type="text"
-                      placeholder="Search chicken breast, roti, paneer, dal, oats, avocado..."
+                      placeholder={searchMode === 'local' ? "Search chicken breast, roti, paneer..." : "Search global database..."}
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full rounded-xl border border-white/[0.08] bg-zinc-900/90 pl-10 pr-4 py-2.5 text-xs text-zinc-100 placeholder-zinc-500 focus:border-zinc-400 focus:outline-none"
+                      className="w-full rounded-xl border border-white/[0.08] bg-zinc-900/90 pl-10 pr-24 py-2.5 text-xs text-zinc-100 placeholder-zinc-500 focus:border-zinc-400 focus:outline-none"
                     />
+                    <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center bg-zinc-800 rounded-lg p-0.5">
+                      <button
+                        onClick={() => {
+                          setSearchMode('local');
+                        }}
+                        className={`px-2 py-1 text-[10px] font-semibold rounded-md transition-all ${
+                          searchMode === 'local' ? 'bg-zinc-100 text-zinc-900' : 'text-zinc-400 hover:text-zinc-200'
+                        }`}
+                      >
+                        Local
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSearchMode('online');
+                          if (searchQuery.trim().length > 2) searchOnlineFood();
+                        }}
+                        className={`px-2 py-1 text-[10px] font-semibold rounded-md transition-all flex items-center gap-1 ${
+                          searchMode === 'online' ? 'bg-indigo-500 text-white' : 'text-zinc-400 hover:text-zinc-200'
+                        }`}
+                      >
+                        <Globe className="w-3 h-3" />
+                        Global
+                      </button>
+                    </div>
                   </div>
 
                   {/* Category Pills */}
@@ -795,30 +874,38 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
                 {/* Food List */}
                 <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
                   
-                  {searchQuery.trim().length > 2 && !isSearchingOnline && onlineResults.length === 0 && (
-                    <div className="p-4 mb-2 rounded-xl border border-indigo-500/20 bg-indigo-500/5 flex flex-col items-center justify-center gap-2">
-                      <span className="text-xs text-indigo-300 text-center">Can't find what you're looking for?</span>
-                      <button 
-                        onClick={searchOnlineFood}
-                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm shadow-indigo-900/20"
-                      >
-                        <Zap className="w-3.5 h-3.5" /> Search with AI
-                      </button>
-                    </div>
-                  )}
-
                   {filteredFoods.length === 0 && !isSearchingOnline && onlineResults.length === 0 && (
                     <div className="py-8 text-center text-zinc-500 text-xs">
-                      No foods matching &ldquo;{searchQuery}&rdquo;. Try the AI search or create a custom entry.
+                      No foods matching &ldquo;{searchQuery}&rdquo;. Try the Global search or create a custom entry.
                     </div>
                   )}
                   {isSearchingOnline && (
                     <div className="flex flex-col items-center justify-center py-8 text-zinc-400 gap-3">
                       <Loader2 className="w-5 h-5 animate-spin text-indigo-500" />
-                      <span className="text-xs font-medium">AI is calculating macros for "{searchQuery}"...</span>
+                      <span className="text-xs font-medium">Searching global database for "{searchQuery}"...</span>
                     </div>
                   )}
-                  {[...filteredFoods, ...onlineResults].map((food) => (
+                  {(
+    (() => {
+      const all = searchMode === 'online' ? [...onlineResults, ...filteredFoods] : filteredFoods;
+      const q = searchQuery.toLowerCase().trim();
+      if (!q) return all;
+
+      return [...all].sort((a, b) => {
+        const aName = a.name.toLowerCase();
+        const bName = b.name.toLowerCase();
+        
+        if (aName === q && bName !== q) return -1;
+        if (bName === q && aName !== q) return 1;
+
+        const aStarts = aName.startsWith(q) ? 1 : 0;
+        const bStarts = bName.startsWith(q) ? 1 : 0;
+        if (aStarts !== bStarts) return bStarts - aStarts;
+
+        return aName.length - bName.length;
+      });
+    })()
+  ).map((food) => (
                       <div
                         key={food.id}
                         onClick={() => handleSelectFood(food)}
@@ -838,7 +925,7 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
                             )}
                             {food.id.startsWith('online_') && (
                               <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 font-medium whitespace-nowrap flex items-center gap-1">
-                                <Globe className="w-2.5 h-2.5" /> AI DB
+                                <Globe className="w-2.5 h-2.5" /> Global DB
                               </span>
                             )}
                           </div>
