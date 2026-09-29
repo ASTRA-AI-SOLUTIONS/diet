@@ -81,6 +81,16 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
 
   const categories = ['All', 'Indian Cuisine', 'Protein', 'Carbs', 'Fats', 'Produce', 'Dairy', 'Snacks'];
 
+  
+
+  
+
+    const [cachedAiFoods, setCachedAiFoods] = useState<FoodItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('astradiet_ai_cache');
+      if (!saved) return []; const parsed = JSON.parse(saved); return Array.isArray(parsed) ? parsed : [];
+    } catch { return []; }
+  });
   const filteredFoods = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
     const combinedDB = [...FOOD_DATABASE, ...cachedAiFoods];
@@ -102,15 +112,6 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
       return matchesSearch && matchesCat;
     });
   }, [searchQuery, selectedCategory]);
-
-  
-
-    const [cachedAiFoods, setCachedAiFoods] = useState<FoodItem[]>(() => {
-    try {
-      const saved = localStorage.getItem('astradiet_ai_cache');
-      return saved ? JSON.parse(saved) : [];
-    } catch { return []; }
-  });
 
   useEffect(() => {
     setOnlineResults([]);

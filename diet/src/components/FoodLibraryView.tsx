@@ -20,9 +20,20 @@ export const FoodLibraryView: React.FC<FoodLibraryViewProps> = ({ onAddFood }) =
 
   const categories = ['All', 'Indian Cuisine', 'Protein', 'Carbs', 'Fats', 'Produce', 'Dairy', 'Snacks'];
 
+  
+
+  
+
+    const [cachedAiFoods, setCachedAiFoods] = useState<FoodItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('astradiet_ai_cache');
+      if (!saved) return []; const parsed = JSON.parse(saved); return Array.isArray(parsed) ? parsed : [];
+    } catch { return []; }
+  });
   const filteredLocal = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    return FOOD_DATABASE.filter((f) => {
+    const combinedDB = [...FOOD_DATABASE, ...cachedAiFoods];
+    return combinedDB.filter((f) => {
       const matchSearch =
         !q ||
         f.name.toLowerCase().includes(q) ||
@@ -42,15 +53,6 @@ export const FoodLibraryView: React.FC<FoodLibraryViewProps> = ({ onAddFood }) =
   }, [searchQuery, selectedCategory]);
 
   const displayedFoods = searchMode === 'online' ? onlineResults : filteredLocal;
-
-  
-
-    const [cachedAiFoods, setCachedAiFoods] = useState<FoodItem[]>(() => {
-    try {
-      const saved = localStorage.getItem('astradiet_ai_cache');
-      return saved ? JSON.parse(saved) : [];
-    } catch { return []; }
-  });
 
   useEffect(() => {
     setOnlineResults([]);
