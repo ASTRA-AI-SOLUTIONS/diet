@@ -521,7 +521,7 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
           </div>
 
           {/* Mode Tabs */}
-          <div className="flex border-b border-white/[0.06] px-6 pt-3 gap-6 text-xs font-medium text-zinc-400">
+          <div className="flex border-b border-white/[0.06] px-4 md:px-6 pt-3 gap-4 md:p-6 text-xs font-medium text-zinc-400">
             <button
               onClick={() => setActiveTab('database')}
               className={`pb-2.5 transition-colors border-b-2 cursor-pointer ${
@@ -555,7 +555,7 @@ export const MealLoggerModal: React.FC<MealLoggerModalProps> = ({
           </div>
 
           {/* Content Body */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
             {activeTab === 'database' && (
               <>
                 {/* Search Bar & Category Filters */}

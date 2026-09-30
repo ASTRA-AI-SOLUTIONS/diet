@@ -143,7 +143,7 @@ export const TopNav: React.FC<TopNavProps> = ({
           {/* "+ Log Meal" Action */}
           <button
             onClick={onOpenMealLogger}
-            className="flex items-center gap-1.5 rounded-lg bg-zinc-100 px-3 py-1.5 text-xs font-semibold text-zinc-950 hover:bg-white transition-all cursor-pointer shadow-sm"
+            className="hidden md:flex items-center gap-1.5 rounded-lg bg-zinc-100 px-3 py-1.5 text-xs font-semibold text-zinc-950 hover:bg-white transition-all cursor-pointer shadow-sm"
           >
             <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
             <span className="hidden sm:inline">Log Meal</span>

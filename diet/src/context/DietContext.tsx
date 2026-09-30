@@ -127,7 +127,15 @@ export const DietProvider: React.FC<{ children: React.ReactNode }> = ({ children
             id: d.id,
             userId: currentUser.id,
           })) as MealEntry[];
-          setMeals(cloudMeals);
+          setMeals((currentLocal) => {
+            const merged = [...currentLocal];
+            cloudMeals.forEach(cm => {
+              const idx = merged.findIndex(lm => lm.id === cm.id);
+              if (idx !== -1) merged[idx] = cm;
+              else merged.push(cm);
+            });
+            return merged.filter(m => m.userId === currentUser.id);
+          });
         } else {
           // If Firestore is empty for this user, backfill any local meals to the cloud
           setMeals((currentLocalMeals) => {
@@ -161,7 +169,15 @@ export const DietProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const cloudLogs = snapshot.docs.map((d) => ({
             ...d.data(),
           })) as DailyLog[];
-          setDailyLogs(cloudLogs);
+          setDailyLogs((currentLocal) => {
+            const merged = [...currentLocal];
+            cloudLogs.forEach(cl => {
+              const idx = merged.findIndex(ll => ll.date === cl.date);
+              if (idx !== -1) merged[idx] = cl;
+              else merged.push(cl);
+            });
+            return merged;
+          });
         } else {
           setDailyLogs((currentLocalLogs) => {
             if (currentLocalLogs.length > 0) {

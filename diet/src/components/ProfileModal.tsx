@@ -165,7 +165,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, ini
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full rounded-xl border border-white/[0.08] bg-zinc-900/90 px-3.5 py-2 text-xs text-white focus:border-zinc-400 focus:outline-none"
+                  className="w-full rounded-xl border border-white/[0.08] bg-zinc-900/90 px-3.5 py-2 text-base md:text-xs text-white focus:border-zinc-400 focus:outline-none"
                 />
               </div>
 

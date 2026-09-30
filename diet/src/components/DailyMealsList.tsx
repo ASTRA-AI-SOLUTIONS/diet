@@ -82,7 +82,7 @@ export const DailyMealsList: React.FC<DailyMealsListProps> = ({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start sm:items-center justify-between gap-2">
         <div>
           <h3 className="text-base font-bold text-white tracking-tight">
             Daily Meal Breakdown
@@ -110,7 +110,7 @@ export const DailyMealsList: React.FC<DailyMealsListProps> = ({
             >
               {/* Header */}
               <div className="flex items-center justify-between pb-3 border-b border-white/[0.08]">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                   <div className={`p-1.5 rounded-lg border ${accentBg}`}>{icon}</div>
                   <div>
                     <h4 className="text-sm font-semibold text-white">{title}</h4>
@@ -181,8 +181,8 @@ export const DailyMealsList: React.FC<DailyMealsListProps> = ({
                         key={meal.id}
                         className="group flex flex-col gap-2 rounded-xl bg-zinc-900/60 p-2.5 border border-white/[0.04] hover:bg-zinc-800/60 hover:border-white/[0.1] transition-all text-xs"
                       >
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1 pr-2">
+                        <div className="flex items-start sm:items-center justify-between gap-2">
+                          <div className="flex-1 min-w-0 pr-2">
                             <div className="font-medium text-zinc-100 flex items-center gap-1.5 flex-wrap">
                               <span>{meal.foodName}</span>
                               <span className="text-[10px] text-zinc-500 font-mono">
@@ -205,7 +205,7 @@ export const DailyMealsList: React.FC<DailyMealsListProps> = ({
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                             <span className="font-mono text-xs font-semibold text-white tabular-nums bg-zinc-800/80 px-2 py-0.5 rounded border border-white/[0.06]">
                               {meal.calories} kcal
                             </span>

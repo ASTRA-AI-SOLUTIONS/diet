@@ -137,7 +137,7 @@ export const GlycemicWorkoutTimelineCard: React.FC<GlycemicWorkoutTimelineCardPr
             type="time"
             value={plannedMileageTime}
             onChange={(e) => setPlannedMileageTime(e.target.value)}
-            className="rounded-lg border border-white/[0.1] bg-zinc-900 px-2 py-1 text-xs font-mono font-bold text-white focus:outline-none cursor-pointer"
+            className="rounded-lg border border-white/[0.1] bg-zinc-900 px-2 py-1 text-base md:text-xs font-mono font-bold text-white focus:outline-none cursor-pointer"
           />
         </div>
       </div>

@@ -187,7 +187,7 @@ export const FoodLibraryView: React.FC<FoodLibraryViewProps> = ({ onAddFood }) =
           <select
             value={selectedMealType}
             onChange={(e) => setSelectedMealType(e.target.value as MealType)}
-            className="rounded-lg border border-white/[0.08] bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-zinc-100 focus:outline-none cursor-pointer"
+            className="rounded-lg border border-white/[0.08] bg-zinc-900 px-3 py-1.5 text-base md:text-xs font-semibold text-zinc-100 focus:outline-none cursor-pointer"
           >
             <option value="breakfast">Breakfast</option>
             <option value="lunch">Lunch</option>
@@ -207,7 +207,7 @@ export const FoodLibraryView: React.FC<FoodLibraryViewProps> = ({ onAddFood }) =
               placeholder={searchMode === 'local' ? "Search food by name or hindi name..." : "Search global food database..."}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-xl border border-white/[0.08] bg-zinc-900/90 pl-10 pr-24 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:border-white/30 focus:outline-none"
+              className="w-full rounded-xl border border-white/[0.08] bg-zinc-900/90 pl-10 pr-24 py-2 text-base md:text-xs text-zinc-100 placeholder-zinc-500 focus:border-white/30 focus:outline-none"
             />
             <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center bg-zinc-800 rounded-lg p-0.5">
               <button
